@@ -98,6 +98,24 @@ python -m stockapp_notion.cli daily-update
 0 16 * * 1-5 cd /path/to/stockapp_notion && .venv/bin/python -m stockapp_notion.cli daily-update >> logs/cron.log 2>&1
 ```
 
+### Windows 작업 스케줄러 (Windows, 매일 16:00)
+
+Windows에는 cron이 없으므로 동일한 역할을 하는 **작업 스케줄러(Task Scheduler)**를 사용합니다.
+`scripts/daily_update.bat`가 프로젝트 디렉토리로 이동해 venv의 python으로 `daily-update`를
+실행하고 결과를 `logs/cron.log`에 남깁니다.
+
+```powershell
+schtasks /Create /TN "StockAppNotionDailyUpdate" /TR "D:\Develop\codex\stockapp_notion\scripts\daily_update.bat" /SC DAILY /ST 16:00 /F
+```
+
+관리 명령:
+
+```powershell
+schtasks /Query /TN "StockAppNotionDailyUpdate" /V /FO LIST   # 상태/다음 실행 시각 확인
+schtasks /Run /TN "StockAppNotionDailyUpdate"                  # 즉시 1회 수동 실행
+schtasks /Delete /TN "StockAppNotionDailyUpdate" /F            # 등록 해제
+```
+
 ### APScheduler (상시 실행 프로세스)
 
 ```bash
