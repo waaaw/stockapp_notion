@@ -1,6 +1,6 @@
 from stockapp_notion.config import settings
 from stockapp_notion.logging_config import get_logger
-from stockapp_notion.notion_api import call_with_retry, get_client
+from stockapp_notion.notion_api import call_with_retry, get_client, resolve_data_source_id
 
 logger = get_logger(__name__)
 
@@ -20,12 +20,13 @@ def yfinance_ticker(code: str, market: str) -> str:
 def list_stocks(client=None) -> list[dict]:
     """종목 마스터 DB의 모든 페이지를 페이징 처리하여 반환한다."""
     client = client or get_client()
+    data_source_id = resolve_data_source_id(client, settings.db_stocks_id)
     results: list[dict] = []
     cursor = None
     while True:
         response = call_with_retry(
-            client.databases.query,
-            database_id=settings.db_stocks_id,
+            client.data_sources.query,
+            data_source_id=data_source_id,
             start_cursor=cursor,
         )
         results.extend(response["results"])
@@ -37,9 +38,10 @@ def list_stocks(client=None) -> list[dict]:
 
 def find_stock_by_code(code: str, client=None) -> dict | None:
     client = client or get_client()
+    data_source_id = resolve_data_source_id(client, settings.db_stocks_id)
     response = call_with_retry(
-        client.databases.query,
-        database_id=settings.db_stocks_id,
+        client.data_sources.query,
+        data_source_id=data_source_id,
         filter={"property": "종목코드", "rich_text": {"equals": code}},
     )
     results = response["results"]

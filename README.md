@@ -15,6 +15,24 @@
 
 평균단가 계산은 **이동 가중평균 방식**입니다(FIFO 아님). 매도 시 평균단가는 유지된 채 수량만 줄어듭니다.
 
+## 참고: Notion API "Data Source" 구조 (2025-09 API 변경)
+
+`notion-client` 3.x부터는 Notion의 2025-09 API 변경을 반영해 데이터베이스가 하나 이상의
+**data source**를 담는 컨테이너로 바뀌었습니다. 실무적으로 영향받는 부분:
+
+- 조회(`query`)는 더 이상 `client.databases.query(database_id=...)`가 아니라
+  `client.data_sources.query(data_source_id=...)`를 사용해야 합니다.
+- 새 DB를 만들 때 속성 스키마는 `properties`가 아니라 `initial_data_source.properties`로 전달합니다.
+- relation 속성은 대상 `database_id`가 아니라 `data_source_id`를 참조해야 합니다.
+- 페이지 생성(`pages.create`)의 `parent`는 `{"database_id": ...}`를 계속 써도 동작합니다(하위 호환).
+
+이 프로젝트는 `.env`에는 기존처럼 `database_id`만 저장하고, `notion_api.resolve_data_source_id()`가
+내부적으로 `database_id -> data_source_id`를 조회해 캐싱합니다. 즉 `.env` 형식이나 사용자 커맨드는
+바뀌지 않고, 라이브러리 레벨의 차이만 흡수합니다.
+
+또한 `yfinance`의 `Ticker(...).fast_info`는 dict처럼 보이지만 `.get("last_price")`로는 값을
+가져올 수 없고(`None` 반환), `info.last_price` 속성 접근을 사용해야 합니다(`prices.py`에 반영됨).
+
 ## 준비물
 
 - Notion 계정 및 워크스페이스

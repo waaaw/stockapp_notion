@@ -17,6 +17,18 @@ def get_client() -> Client:
     return Client(auth=settings.notion_token)
 
 
+_data_source_id_cache: dict[str, str] = {}
+
+
+def resolve_data_source_id(client: Client, database_id: str) -> str:
+    """Notion의 2025-09 API 변경으로 데이터베이스 조회(query)는 database_id가 아닌
+    data_source_id를 요구한다. database_id -> 기본 data_source_id를 조회해 캐싱한다."""
+    if database_id not in _data_source_id_cache:
+        db = call_with_retry(client.databases.retrieve, database_id=database_id)
+        _data_source_id_cache[database_id] = db["data_sources"][0]["id"]
+    return _data_source_id_cache[database_id]
+
+
 def call_with_retry(fn, *args, **kwargs):
     """Notion API 호출을 감싸 rate limit(초당 3회) 및 일시적 오류에 대해
     지수 백오프로 재시도한다."""

@@ -12,7 +12,7 @@ def fetch_current_price(code: str, market: str) -> float | None:
     ticker = yfinance_ticker(code, market)
     try:
         info = yf.Ticker(ticker).fast_info
-        price = info.get("last_price")
+        price = info.last_price
         if price is None:
             raise ValueError("last_price가 비어 있습니다")
         return float(price)

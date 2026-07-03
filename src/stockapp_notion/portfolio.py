@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from stockapp_notion.config import settings
 from stockapp_notion.logging_config import get_logger
-from stockapp_notion.notion_api import call_with_retry, get_client
+from stockapp_notion.notion_api import call_with_retry, get_client, resolve_data_source_id
 from stockapp_notion.stocks import list_stocks
 from stockapp_notion.transactions import list_transactions_for_stock
 
@@ -50,9 +50,10 @@ def compute_holding(transactions: list[dict]) -> Holding:
 
 def find_portfolio_page(stock_page_id: str, client=None) -> dict | None:
     client = client or get_client()
+    data_source_id = resolve_data_source_id(client, settings.db_portfolio_id)
     response = call_with_retry(
-        client.databases.query,
-        database_id=settings.db_portfolio_id,
+        client.data_sources.query,
+        data_source_id=data_source_id,
         filter={"property": "종목", "relation": {"contains": stock_page_id}},
     )
     results = response["results"]

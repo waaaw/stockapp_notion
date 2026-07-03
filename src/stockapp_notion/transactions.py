@@ -1,6 +1,6 @@
 from stockapp_notion.config import settings
 from stockapp_notion.logging_config import get_logger
-from stockapp_notion.notion_api import call_with_retry, get_client
+from stockapp_notion.notion_api import call_with_retry, get_client, resolve_data_source_id
 
 logger = get_logger(__name__)
 
@@ -49,12 +49,13 @@ def add_transaction(
 def list_transactions_for_stock(stock_page_id: str, client=None) -> list[dict]:
     """특정 종목의 전체 매매내역을 페이징 처리하여 거래일자 오름차순으로 반환한다."""
     client = client or get_client()
+    data_source_id = resolve_data_source_id(client, settings.db_transactions_id)
     results: list[dict] = []
     cursor = None
     while True:
         response = call_with_retry(
-            client.databases.query,
-            database_id=settings.db_transactions_id,
+            client.data_sources.query,
+            data_source_id=data_source_id,
             filter={"property": "종목", "relation": {"contains": stock_page_id}},
             sorts=[{"property": "거래일자", "direction": "ascending"}],
             start_cursor=cursor,
