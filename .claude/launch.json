@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "stockapp-notion-web",
+      "runtimeExecutable": "D:\\Develop\\codex\\stockapp_notion\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["-m", "stockapp_notion.webapp"],
+      "port": 5000
+    }
+  ]
+}

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>주식 포트폴리오 관리</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; max-width: 900px; margin: 40px auto; padding: 0 16px; color: #222; }
+  h1 { font-size: 22px; }
+  h2 { font-size: 16px; margin-top: 36px; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
+  form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+  input, select { padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+  input[type="text"], input[type="number"], input[type="date"] { width: 120px; }
+  button { padding: 7px 14px; border: none; border-radius: 4px; background: #2563eb; color: #fff; cursor: pointer; font-size: 14px; }
+  button:hover { background: #1d4ed8; }
+  button.secondary { background: #64748b; }
+  button.secondary:hover { background: #475569; }
+  table { border-collapse: collapse; width: 100%; margin-top: 8px; font-size: 14px; }
+  th, td { border: 1px solid #e2e8f0; padding: 6px 10px; text-align: left; }
+  th { background: #f8fafc; }
+  .flash { padding: 10px 14px; border-radius: 4px; margin: 10px 0; font-size: 14px; }
+  .flash.success { background: #dcfce7; color: #166534; }
+  .flash.error { background: #fee2e2; color: #991b1b; }
+  .actions { display: flex; gap: 8px; margin: 12px 0; }
+  .hint { color: #64748b; font-size: 12px; }
+</style>
+</head>
+<body>
+  <h1>주식 포트폴리오 관리 (Notion 연동)</h1>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="flash {{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <h2>일괄 작업</h2>
+  <div class="actions">
+    <form method="post" action="{{ url_for('action_update_prices') }}">
+      <button type="submit">현재가 갱신</button>
+    </form>
+    <form method="post" action="{{ url_for('action_sync_portfolio') }}">
+      <button type="submit" class="secondary">포트폴리오 재계산</button>
+    </form>
+    <form method="post" action="{{ url_for('action_daily_update') }}">
+      <button type="submit" class="secondary">일일 갱신(현재가+포트폴리오)</button>
+    </form>
+  </div>
+
+  <h2>종목 등록</h2>
+  <form method="post" action="{{ url_for('create_stock') }}">
+    <input type="text" name="name" placeholder="종목명 (예: 삼성전자)" required>
+    <input type="text" name="code" placeholder="종목코드 (예: 005930)" required>
+    <select name="market" required>
+      {% for m in markets %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+    </select>
+    <input type="text" name="sector" placeholder="섹터 (예: IT)" required>
+    <select name="currency" required>
+      {% for c in currencies %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+    </select>
+    <button type="submit">등록</button>
+  </form>
+
+  <h2>매매내역 입력</h2>
+  <form method="post" action="{{ url_for('create_transaction') }}">
+    <select name="code" required>
+      <option value="" disabled selected>종목 선택</option>
+      {% for s in stocks %}<option value="{{ s.code }}">{{ s.name }} ({{ s.code }})</option>{% endfor %}
+    </select>
+    <select name="type" required>
+      <option value="매수">매수</option>
+      <option value="매도">매도</option>
+    </select>
+    <input type="number" step="any" name="qty" placeholder="수량" required>
+    <input type="number" step="any" name="price" placeholder="단가" required>
+    <input type="number" step="any" name="fee" placeholder="수수료(선택)">
+    <input type="date" name="date" required>
+    <button type="submit">등록 (포트폴리오 자동 재계산)</button>
+  </form>
+
+  <h2>배당금 입력</h2>
+  <form method="post" action="{{ url_for('create_dividend') }}">
+    <select name="code" required>
+      <option value="" disabled selected>종목 선택</option>
+      {% for s in stocks %}<option value="{{ s.code }}">{{ s.name }} ({{ s.code }})</option>{% endfor %}
+    </select>
+    <input type="date" name="date" required>
+    <input type="number" step="any" name="pretax" placeholder="세전배당금" required>
+    <input type="number" step="any" name="posttax" placeholder="세후배당금" required>
+    <button type="submit">등록</button>
+  </form>
+  <p class="hint">※ DB_DIVIDENDS_ID가 .env에 설정되어 있어야 동작합니다.</p>
+
+  <h2>등록된 종목 ({{ stocks|length }}개)</h2>
+  <table>
+    <tr><th>종목명</th><th>코드</th><th>시장</th><th>섹터</th><th>통화</th><th>현재가</th></tr>
+    {% for s in stocks %}
+    <tr>
+      <td>{{ s.name }}</td>
+      <td>{{ s.code }}</td>
+      <td>{{ s.market }}</td>
+      <td>{{ s.sector }}</td>
+      <td>{{ s.currency }}</td>
+      <td>{{ "{:,.0f}".format(s.current_price) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p class="hint">상세 보유수량/평가손익 등 전체 현황은 Notion의 "포트폴리오 요약" 데이터베이스에서 확인하세요.</p>
+</body>
+</html>

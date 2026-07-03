@@ -68,6 +68,8 @@ python scripts/setup_notion_databases.py <상위_페이지_ID>
 
 ## 2단계: 종목 등록 및 매매 입력
 
+CLI 대신 웹 폼으로 입력하고 싶다면 아래 "웹 UI" 절을 참고하세요. CLI로 하는 경우:
+
 ```bash
 # 종목 등록
 python -m stockapp_notion.cli add-stock --name 삼성전자 --code 005930 --market 코스피 --sector IT --currency KRW
@@ -124,6 +126,24 @@ schtasks /Delete /TN "StockAppNotionDailyUpdate" /F            # 등록 해제
 python scripts/run_daily_update.py
 ```
 
+## 웹 UI (선택)
+
+CLI 명령어 입력 대신 브라우저 폼으로 종목/매매내역/배당금을 입력하고, 시세 갱신·포트폴리오 재계산
+버튼을 클릭할 수 있는 로컬 웹 서버입니다. Notion을 직접 호출하는 기존 함수(`stocks.py`,
+`transactions.py`, `dividends.py`, `prices.py`, `portfolio.py`)를 그대로 재사용하며,
+데이터를 별도로 저장하지 않고 매 요청마다 Notion에서 조회/기록합니다.
+
+```bash
+python -m stockapp_notion.webapp
+```
+
+브라우저에서 http://127.0.0.1:5000 접속. 종목/매매/배당 입력 폼과, 등록된 종목 + 현재가 목록을
+볼 수 있습니다. 보유수량/평가손익 등 상세 포트폴리오는 여전히 Notion의 "포트폴리오 요약" DB에서
+확인합니다(이 웹 UI는 입력에 특화되어 있고, 별도 차트/대시보드 기능은 없습니다).
+
+⚠️ 인증 없이 로컬(127.0.0.1)에서만 열리도록 되어 있습니다. 외부에 노출하려면(예: 다른 기기에서
+접속) 반드시 인증을 추가한 뒤 사용하세요.
+
 ## 로깅 및 에러 처리
 
 - 모든 실행 로그는 `logs/app.log`(로테이션, 5개 x 2MB)와 콘솔에 동시 기록됩니다.
@@ -152,7 +172,9 @@ stockapp_notion/
 │   ├── portfolio.py        # 보유수량/평균단가/평가손익/수익률 계산 및 upsert
 │   ├── prices.py           # yfinance 현재가 조회 및 일괄 갱신
 │   ├── dividends.py        # 배당금 내역 등록
-│   └── cli.py               # CLI 진입점
+│   ├── cli.py               # CLI 진입점
+│   ├── webapp.py            # 로컬 웹 UI (Flask, 입력 폼)
+│   └── templates/index.html
 ├── scripts/
 │   ├── setup_notion_databases.py  # DB 4개 최초 생성
 │   └── run_daily_update.py        # APScheduler 상시 실행 예시

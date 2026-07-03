@@ -8,14 +8,16 @@ version = "0.1.0"
 description = "Notion 기반 주식 포트폴리오 관리 시스템"
 requires-python = ">=3.10"
 dependencies = [
-    "notion-client>=2.2.1",
+    "notion-client>=3.0.0",
     "yfinance>=0.2.40",
     "python-dotenv>=1.0.1",
     "APScheduler>=3.10.4",
+    "Flask>=3.0.0",
 ]
 
 [project.scripts]
 stockapp-notion = "stockapp_notion.cli:main"
+stockapp-notion-web = "stockapp_notion.webapp:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
