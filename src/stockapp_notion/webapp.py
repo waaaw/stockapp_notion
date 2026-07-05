@@ -5,10 +5,18 @@ from flask import Flask, flash, redirect, render_template, request, url_for
 from stockapp_notion.dividends import add_dividend
 from stockapp_notion.logging_config import get_logger
 from stockapp_notion.notion_api import get_client
-from stockapp_notion.portfolio import list_portfolio_summary, sync_all_portfolios
+from stockapp_notion.notion_helpers import prop_number, prop_rich_text, prop_select_name, prop_title
+from stockapp_notion.portfolio import list_portfolio_summary, sync_all_portfolios, sync_portfolio_for_stock
 from stockapp_notion.prices import update_all_prices
 from stockapp_notion.stocks import add_stock, find_stock_by_code, list_stocks
-from stockapp_notion.transactions import add_transaction
+from stockapp_notion.transactions import (
+    TRADE_TYPES,
+    add_transaction,
+    delete_transaction,
+    find_duplicate_transaction,
+    list_transactions_for_stock,
+    update_transaction,
+)
 
 logger = get_logger(__name__)
 
@@ -19,36 +27,17 @@ MARKETS = ["코스피", "코스닥", "나스닥", "NYSE", "기타"]
 CURRENCIES = ["KRW", "USD"]
 
 
-def _title(page: dict, prop: str) -> str:
-    items = page["properties"][prop]["title"]
-    return items[0]["text"]["content"] if items else ""
-
-
-def _rich_text(page: dict, prop: str) -> str:
-    items = page["properties"][prop]["rich_text"]
-    return items[0]["text"]["content"] if items else ""
-
-
-def _select_name(page: dict, prop: str) -> str:
-    select = page["properties"][prop]["select"]
-    return select["name"] if select else ""
-
-
-def _number(page: dict, prop: str) -> float:
-    return page["properties"][prop]["number"] or 0
-
-
 def _stock_rows(client) -> list[dict]:
     rows = []
     for page in list_stocks(client=client):
         rows.append(
             {
-                "name": _title(page, "종목명"),
-                "code": _rich_text(page, "종목코드"),
-                "market": _select_name(page, "시장구분"),
-                "sector": _select_name(page, "섹터"),
-                "currency": _select_name(page, "통화"),
-                "current_price": _number(page, "현재가"),
+                "name": prop_title(page, "종목명"),
+                "code": prop_rich_text(page, "종목코드"),
+                "market": prop_select_name(page, "시장구분"),
+                "sector": prop_select_name(page, "섹터"),
+                "currency": prop_select_name(page, "통화"),
+                "current_price": prop_number(page, "현재가"),
             }
         )
     return rows
@@ -59,10 +48,14 @@ def _portfolio_totals(holdings: list[dict]) -> dict:
     total_profit = sum(h["profit"] for h in holdings)
     total_cost = total_valuation - total_profit
     total_return_pct = (total_profit / total_cost * 100) if total_cost else 0.0
+    total_realized = sum(h["realized_pnl"] for h in holdings)
+    total_return = sum(h["total_return"] for h in holdings)
     return {
         "valuation": total_valuation,
         "profit": total_profit,
         "return_pct": total_return_pct,
+        "realized_pnl": total_realized,
+        "total_return": total_return,
     }
 
 
@@ -70,8 +63,10 @@ def _portfolio_totals(holdings: list[dict]) -> dict:
 def index():
     client = get_client()
     stocks = _stock_rows(client)
-    holdings = [h for h in list_portfolio_summary(client=client) if h["qty"] > 0]
-    totals = _portfolio_totals(holdings)
+    summary = list_portfolio_summary(client=client)
+    # 청산(보유수량 0)된 종목도 실현손익/총수익 합계에는 반영하되, 표에는 현재 보유 중인 종목만 보여준다.
+    holdings = [h for h in summary if h["qty"] > 0]
+    totals = _portfolio_totals(summary)
     return render_template(
         "index.html",
         stocks=stocks,
@@ -109,21 +104,105 @@ def create_transaction():
             flash(f"종목코드 {code}를 찾을 수 없습니다. 먼저 종목을 등록하세요.", "error")
             return redirect(url_for("index"))
 
+        trade_date = request.form["date"]
+        buy_sell = request.form["type"]
+        qty = float(request.form["qty"])
+        price = float(request.form["price"])
+        if find_duplicate_transaction(stock["id"], trade_date, buy_sell, qty, price, client=client):
+            flash(f"주의: 동일 조건({trade_date} {buy_sell} {qty}주 @ {price})의 매매내역이 이미 있습니다. 그래도 등록을 진행합니다.", "error")
+
         add_transaction(
             stock_page_id=stock["id"],
-            trade_date=request.form["date"],
-            buy_sell=request.form["type"],
-            qty=float(request.form["qty"]),
-            price=float(request.form["price"]),
+            trade_date=trade_date,
+            buy_sell=buy_sell,
+            qty=qty,
+            price=price,
             fee=float(request.form.get("fee") or 0),
             client=client,
         )
         sync_all_portfolios(client=client)
-        flash(f"매매내역 등록 완료: {code} {request.form['type']} {request.form['qty']}주", "success")
+        flash(f"매매내역 등록 완료: {code} {buy_sell} {qty}주", "success")
     except Exception as exc:
         logger.exception("웹 UI 매매내역 등록 실패")
         flash(f"매매내역 등록 실패: {exc}", "error")
     return redirect(url_for("index"))
+
+
+@app.route("/transactions/<code>")
+def view_transactions(code):
+    client = get_client()
+    stock = find_stock_by_code(code, client=client)
+    if not stock:
+        flash(f"종목코드 {code}를 찾을 수 없습니다.", "error")
+        return redirect(url_for("index"))
+
+    rows = []
+    for tx in list_transactions_for_stock(stock["id"], client=client):
+        props = tx["properties"]
+        rows.append(
+            {
+                "id": tx["id"],
+                "trade_date": props["거래일자"]["date"]["start"] if props["거래일자"]["date"] else "",
+                "type": props["매매구분"]["select"]["name"] if props["매매구분"]["select"] else "",
+                "qty": props["수량"]["number"] or 0,
+                "price": props["단가"]["number"] or 0,
+                "fee": props["수수료"]["number"] or 0,
+                "total_amount": props["총거래금액"]["number"] or 0,
+            }
+        )
+    rows.sort(key=lambda r: r["trade_date"], reverse=True)
+
+    return render_template(
+        "transactions.html",
+        stock_name=prop_title(stock, "종목명"),
+        code=code,
+        rows=rows,
+        trade_types=TRADE_TYPES,
+    )
+
+
+@app.route("/transactions/<transaction_id>/edit", methods=["POST"])
+def edit_transaction(transaction_id):
+    code = request.form["code"]
+    try:
+        client = get_client()
+        tx = client.pages.retrieve(page_id=transaction_id)
+        stock_id = tx["properties"]["종목"]["relation"][0]["id"]
+
+        update_transaction(
+            transaction_id,
+            trade_date=request.form["date"] or None,
+            buy_sell=request.form["type"] or None,
+            qty=float(request.form["qty"]) if request.form.get("qty") else None,
+            price=float(request.form["price"]) if request.form.get("price") else None,
+            fee=float(request.form["fee"]) if request.form.get("fee") else None,
+            client=client,
+        )
+        stock = client.pages.retrieve(page_id=stock_id)
+        sync_portfolio_for_stock(stock, client=client)
+        flash("매매내역을 수정했습니다.", "success")
+    except Exception as exc:
+        logger.exception("웹 UI 매매내역 수정 실패")
+        flash(f"매매내역 수정 실패: {exc}", "error")
+    return redirect(url_for("view_transactions", code=code))
+
+
+@app.route("/transactions/<transaction_id>/delete", methods=["POST"])
+def remove_transaction(transaction_id):
+    code = request.form["code"]
+    try:
+        client = get_client()
+        tx = client.pages.retrieve(page_id=transaction_id)
+        stock_id = tx["properties"]["종목"]["relation"][0]["id"]
+
+        delete_transaction(transaction_id, client=client)
+        stock = client.pages.retrieve(page_id=stock_id)
+        sync_portfolio_for_stock(stock, client=client)
+        flash("매매내역을 삭제했습니다.", "success")
+    except Exception as exc:
+        logger.exception("웹 UI 매매내역 삭제 실패")
+        flash(f"매매내역 삭제 실패: {exc}", "error")
+    return redirect(url_for("view_transactions", code=code))
 
 
 @app.route("/dividends", methods=["POST"])

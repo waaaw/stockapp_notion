@@ -59,9 +59,13 @@
       {{ "{:+,.0f}".format(totals.profit) }}
     </strong>원
     (<span class="{{ 'profit' if totals.return_pct >= 0 else 'loss' }}">{{ "{:+.2f}".format(totals.return_pct) }}%</span>)
+    · 누적실현손익
+    <strong class="{{ 'profit' if totals.realized_pnl >= 0 else 'loss' }}">{{ "{:+,.0f}".format(totals.realized_pnl) }}</strong>원
+    · 총수익(배당포함)
+    <strong class="{{ 'profit' if totals.total_return >= 0 else 'loss' }}">{{ "{:+,.0f}".format(totals.total_return) }}</strong>원
   </p>
   <table>
-    <tr><th>종목명</th><th>코드</th><th>보유수량</th><th>평균단가</th><th>평가금액</th><th>평가손익</th><th>수익률(%)</th></tr>
+    <tr><th>종목명</th><th>코드</th><th>보유수량</th><th>평균단가</th><th>평가금액</th><th>평가손익</th><th>수익률(%)</th><th>누적실현손익</th><th>총수익(배당포함)</th><th></th></tr>
     {% for h in holdings %}
     <tr>
       <td>{{ h.name }}</td>
@@ -71,6 +75,9 @@
       <td>{{ "{:,.0f}".format(h.valuation) }}</td>
       <td class="{{ 'profit' if h.profit >= 0 else 'loss' }}">{{ "{:+,.0f}".format(h.profit) }}</td>
       <td class="{{ 'profit' if h.return_pct >= 0 else 'loss' }}">{{ "{:+.2f}".format(h.return_pct) }}</td>
+      <td class="{{ 'profit' if h.realized_pnl >= 0 else 'loss' }}">{{ "{:+,.0f}".format(h.realized_pnl) }}</td>
+      <td class="{{ 'profit' if h.total_return >= 0 else 'loss' }}">{{ "{:+,.0f}".format(h.total_return) }}</td>
+      <td><a href="{{ url_for('view_transactions', code=h.code) }}">매매내역</a></td>
     </tr>
     {% endfor %}
   </table>
@@ -124,7 +131,7 @@
 
   <h2>등록된 종목 ({{ stocks|length }}개)</h2>
   <table>
-    <tr><th>종목명</th><th>코드</th><th>시장</th><th>섹터</th><th>통화</th><th>현재가</th></tr>
+    <tr><th>종목명</th><th>코드</th><th>시장</th><th>섹터</th><th>통화</th><th>현재가</th><th></th></tr>
     {% for s in stocks %}
     <tr>
       <td>{{ s.name }}</td>
@@ -133,6 +140,7 @@
       <td>{{ s.sector }}</td>
       <td>{{ s.currency }}</td>
       <td>{{ "{:,.0f}".format(s.current_price) }}</td>
+      <td><a href="{{ url_for('view_transactions', code=s.code) }}">매매내역</a></td>
     </tr>
     {% endfor %}
   </table>

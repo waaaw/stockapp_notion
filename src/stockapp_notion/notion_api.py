@@ -29,6 +29,20 @@ def resolve_data_source_id(client: Client, database_id: str) -> str:
     return _data_source_id_cache[database_id]
 
 
+def ensure_property(client: Client, data_source_id: str, prop_name: str, prop_schema: dict) -> None:
+    """data source 스키마에 prop_name이 없으면 추가한다(있으면 아무 것도 하지 않는 멱등 동작).
+    Formula/Rollup은 API로 만들 수 없어 Number/Select 등 단순 타입에만 사용한다."""
+    data_source = call_with_retry(client.data_sources.retrieve, data_source_id=data_source_id)
+    if prop_name in data_source["properties"]:
+        return
+    call_with_retry(
+        client.data_sources.update,
+        data_source_id=data_source_id,
+        properties={prop_name: prop_schema},
+    )
+    logger.info("data source %s에 속성 추가: %s", data_source_id, prop_name)
+
+
 def call_with_retry(fn, *args, **kwargs):
     """Notion API 호출을 감싸 rate limit(초당 3회) 및 일시적 오류에 대해
     지수 백오프로 재시도한다."""

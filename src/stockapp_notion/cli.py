@@ -4,10 +4,16 @@ import sys
 from stockapp_notion.dividends import add_dividend
 from stockapp_notion.logging_config import get_logger
 from stockapp_notion.notion_api import get_client
-from stockapp_notion.portfolio import sync_all_portfolios
+from stockapp_notion.portfolio import sync_all_portfolios, sync_portfolio_for_stock
 from stockapp_notion.prices import update_all_prices
 from stockapp_notion.stocks import add_stock, find_stock_by_code
-from stockapp_notion.transactions import add_transaction
+from stockapp_notion.transactions import (
+    TRADE_TYPES,
+    add_transaction,
+    delete_transaction,
+    list_transactions_for_stock,
+    update_transaction,
+)
 
 logger = get_logger(__name__)
 
@@ -44,6 +50,48 @@ def cmd_add_transaction(args: argparse.Namespace) -> None:
         client=client,
     )
     sync_all_portfolios(client=client)
+
+
+def cmd_list_transactions(args: argparse.Namespace) -> None:
+    client = get_client()
+    stock_id = _resolve_stock_id(client, args.code)
+    transactions = list_transactions_for_stock(stock_id, client=client)
+    if not transactions:
+        print("매매내역이 없습니다.")
+        return
+    for tx in transactions:
+        props = tx["properties"]
+        print(
+            f"{tx['id']}  {props['거래일자']['date']['start']}  "
+            f"{props['매매구분']['select']['name']}  "
+            f"{props['수량']['number']}주 @ {props['단가']['number']}  "
+            f"수수료 {props['수수료']['number']}"
+        )
+
+
+def cmd_edit_transaction(args: argparse.Namespace) -> None:
+    client = get_client()
+    tx = update_transaction(
+        args.transaction_id,
+        trade_date=args.date,
+        buy_sell=args.type,
+        qty=args.qty,
+        price=args.price,
+        fee=args.fee,
+        client=client,
+    )
+    stock_id = tx["properties"]["종목"]["relation"][0]["id"]
+    stock = client.pages.retrieve(page_id=stock_id)
+    sync_portfolio_for_stock(stock, client=client)
+
+
+def cmd_delete_transaction(args: argparse.Namespace) -> None:
+    client = get_client()
+    tx = client.pages.retrieve(page_id=args.transaction_id)
+    stock_id = tx["properties"]["종목"]["relation"][0]["id"]
+    delete_transaction(args.transaction_id, client=client)
+    stock = client.pages.retrieve(page_id=stock_id)
+    sync_portfolio_for_stock(stock, client=client)
 
 
 def cmd_add_dividend(args: argparse.Namespace) -> None:
@@ -86,12 +134,29 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("add-transaction", help="매매내역 등록 + 포트폴리오 재계산")
     p.add_argument("--code", required=True, help="종목코드")
-    p.add_argument("--type", required=True, choices=["매수", "매도"])
+    p.add_argument("--type", required=True, choices=list(TRADE_TYPES))
     p.add_argument("--qty", required=True, type=float)
     p.add_argument("--price", required=True, type=float)
     p.add_argument("--fee", type=float, default=0)
     p.add_argument("--date", required=True, help="YYYY-MM-DD")
     p.set_defaults(func=cmd_add_transaction)
+
+    p = sub.add_parser("list-transactions", help="특정 종목의 매매내역 조회 (페이지ID 확인용)")
+    p.add_argument("--code", required=True, help="종목코드")
+    p.set_defaults(func=cmd_list_transactions)
+
+    p = sub.add_parser("edit-transaction", help="매매내역 수정 (변경할 항목만 지정)")
+    p.add_argument("--transaction-id", required=True, help="list-transactions로 확인한 페이지ID")
+    p.add_argument("--type", choices=list(TRADE_TYPES))
+    p.add_argument("--qty", type=float)
+    p.add_argument("--price", type=float)
+    p.add_argument("--fee", type=float)
+    p.add_argument("--date", help="YYYY-MM-DD")
+    p.set_defaults(func=cmd_edit_transaction)
+
+    p = sub.add_parser("delete-transaction", help="매매내역 삭제 (휴지통 이동, 복구 가능)")
+    p.add_argument("--transaction-id", required=True, help="list-transactions로 확인한 페이지ID")
+    p.set_defaults(func=cmd_delete_transaction)
 
     p = sub.add_parser("add-dividend", help="배당금 내역 등록")
     p.add_argument("--code", required=True)

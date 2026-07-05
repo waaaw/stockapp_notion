@@ -3,6 +3,7 @@ import yfinance as yf
 from stockapp_notion.config import settings
 from stockapp_notion.logging_config import get_logger
 from stockapp_notion.notion_api import call_with_retry, get_client
+from stockapp_notion.notion_helpers import prop_rich_text, prop_select_name, prop_title
 from stockapp_notion.stocks import list_stocks, yfinance_ticker
 
 logger = get_logger(__name__)
@@ -29,10 +30,9 @@ def update_all_prices(client=None) -> dict[str, int]:
 
     success, failed = 0, 0
     for page in stocks:
-        props = page["properties"]
-        name = props["종목명"]["title"][0]["text"]["content"] if props["종목명"]["title"] else page["id"]
-        code = props["종목코드"]["rich_text"][0]["text"]["content"] if props["종목코드"]["rich_text"] else ""
-        market = props["시장구분"]["select"]["name"] if props["시장구분"]["select"] else ""
+        name = prop_title(page, "종목명") or page["id"]
+        code = prop_rich_text(page, "종목코드")
+        market = prop_select_name(page, "시장구분")
 
         price = fetch_current_price(code, market)
         if price is None:
