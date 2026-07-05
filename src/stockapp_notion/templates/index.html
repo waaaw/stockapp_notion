@@ -2,34 +2,145 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<title>주식 포트폴리오 관리</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>주식 포트폴리오</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
-  body { font-family: "Malgun Gothic", sans-serif; max-width: 900px; margin: 40px auto; padding: 0 16px; color: #222; }
-  h1 { font-size: 22px; }
-  h2 { font-size: 16px; margin-top: 36px; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
-  form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
-  input, select { padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
-  input[type="text"], input[type="number"], input[type="date"] { width: 120px; }
-  button { padding: 7px 14px; border: none; border-radius: 4px; background: #2563eb; color: #fff; cursor: pointer; font-size: 14px; }
-  button:hover { background: #1d4ed8; }
-  button.secondary { background: #64748b; }
-  button.secondary:hover { background: #475569; }
-  table { border-collapse: collapse; width: 100%; margin-top: 8px; font-size: 14px; }
-  th, td { border: 1px solid #e2e8f0; padding: 6px 10px; text-align: left; }
-  th { background: #f8fafc; }
-  .flash { padding: 10px 14px; border-radius: 4px; margin: 10px 0; font-size: 14px; }
-  .flash.success { background: #dcfce7; color: #166534; }
-  .flash.error { background: #fee2e2; color: #991b1b; }
-  .actions { display: flex; gap: 8px; margin: 12px 0; }
-  .hint { color: #64748b; font-size: 12px; }
-  .profit { color: #b91c1c; }
-  .loss { color: #1d4ed8; }
-  .totals { font-size: 15px; margin: 10px 0 4px; }
-  .empty { color: #94a3b8; font-size: 13px; padding: 10px 0; }
+  :root {
+    --bg: #0b1120;
+    --card: #131c31;
+    --card-hover: #182440;
+    --border: #1e2a45;
+    --text: #e2e8f0;
+    --muted: #7c8db5;
+    --accent: #6366f1;
+    --accent-2: #8b5cf6;
+    --up: #f87171;      /* 상승/이익 = 빨강 (한국 관례) */
+    --down: #60a5fa;    /* 하락/손실 = 파랑 */
+    --green: #34d399;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Pretendard", "Malgun Gothic", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: 60px;
+  }
+  .container { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+
+  header {
+    background: linear-gradient(135deg, rgba(99,102,241,.12), rgba(139,92,246,.06) 60%, transparent);
+    border-bottom: 1px solid var(--border);
+    padding: 28px 0 22px;
+    margin-bottom: 28px;
+  }
+  .header-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+  h1 .sub { font-size: 13px; color: var(--muted); font-weight: 400; margin-left: 10px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .actions form { margin: 0; }
+
+  button, .btn {
+    font-family: inherit;
+    padding: 9px 16px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .15s, transform .1s;
+  }
+  button:hover { opacity: .88; }
+  button:active { transform: scale(.97); }
+  button.ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  button.ghost:hover { color: var(--text); border-color: var(--accent); opacity: 1; }
+
+  .flash { padding: 12px 16px; border-radius: 12px; margin: 0 0 16px; font-size: 14px; border: 1px solid; }
+  .flash.success { background: rgba(52,211,153,.08); border-color: rgba(52,211,153,.3); color: var(--green); }
+  .flash.error { background: rgba(248,113,113,.08); border-color: rgba(248,113,113,.3); color: var(--up); }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 28px; }
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px 22px;
+  }
+  .stat-card .label { font-size: 12.5px; color: var(--muted); margin-bottom: 8px; font-weight: 500; }
+  .stat-card .value { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+  .stat-card .delta { font-size: 13px; margin-top: 5px; font-weight: 600; }
+  .up { color: var(--up); }
+  .down { color: var(--down); }
+
+  .grid { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 22px;
+    margin-bottom: 20px;
+  }
+  .card h2 { font-size: 15px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .card h2 .dot { width: 8px; height: 8px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 11px 10px; border-bottom: 1px solid rgba(30,42,69,.6); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--card-hover); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .stock-name { font-weight: 600; }
+  .stock-code { color: var(--muted); font-size: 12px; }
+  a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  a:hover { text-decoration: underline; }
+
+  .chart-wrap { position: relative; height: 240px; margin-top: 4px; }
+
+  form.entry { display: grid; gap: 10px; }
+  form.entry .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  input, select {
+    font-family: inherit;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    padding: 9px 12px;
+    font-size: 13.5px;
+    flex: 1;
+    min-width: 0;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  input::placeholder { color: #4a5878; }
+  select { appearance: none; }
+
+  .empty { color: var(--muted); font-size: 13.5px; padding: 14px 0; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.5; }
 </style>
 </head>
 <body>
-  <h1>주식 포트폴리오 관리 (Notion 연동)</h1>
+
+<header>
+  <div class="container header-row">
+    <h1>주식 포트폴리오<span class="sub">Notion 연동 대시보드</span></h1>
+    <div class="actions">
+      <form method="post" action="{{ url_for('action_update_prices') }}"><button type="submit">현재가 갱신</button></form>
+      <form method="post" action="{{ url_for('action_sync_portfolio') }}"><button type="submit" class="ghost">포트폴리오 재계산</button></form>
+      <form method="post" action="{{ url_for('action_daily_update') }}"><button type="submit" class="ghost">일일 갱신</button></form>
+    </div>
+  </div>
+</header>
+
+<div class="container">
 
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for category, message in messages %}
@@ -37,113 +148,186 @@
     {% endfor %}
   {% endwith %}
 
-  <h2>일괄 작업</h2>
-  <div class="actions">
-    <form method="post" action="{{ url_for('action_update_prices') }}">
-      <button type="submit">현재가 갱신</button>
-    </form>
-    <form method="post" action="{{ url_for('action_sync_portfolio') }}">
-      <button type="submit" class="secondary">포트폴리오 재계산</button>
-    </form>
-    <form method="post" action="{{ url_for('action_daily_update') }}">
-      <button type="submit" class="secondary">일일 갱신(현재가+포트폴리오)</button>
-    </form>
+  <div class="stats">
+    <div class="stat-card">
+      <div class="label">총 평가금액</div>
+      <div class="value">{{ "{:,.0f}".format(totals.valuation) }}<span style="font-size:14px; color:var(--muted);"> 원</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="label">평가손익 (미실현)</div>
+      <div class="value {{ 'up' if totals.profit >= 0 else 'down' }}">{{ "{:+,.0f}".format(totals.profit) }}</div>
+      <div class="delta {{ 'up' if totals.return_pct >= 0 else 'down' }}">{{ "{:+.2f}".format(totals.return_pct) }}%</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">누적 실현손익</div>
+      <div class="value {{ 'up' if totals.realized_pnl >= 0 else 'down' }}">{{ "{:+,.0f}".format(totals.realized_pnl) }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">총수익 (실현+미실현+배당)</div>
+      <div class="value {{ 'up' if totals.total_return >= 0 else 'down' }}">{{ "{:+,.0f}".format(totals.total_return) }}</div>
+    </div>
   </div>
 
-  <h2>보유 현황</h2>
-  {% if holdings %}
-  <p class="totals">
-    총 평가금액 <strong>{{ "{:,.0f}".format(totals.valuation) }}</strong>원 ·
-    총 평가손익
-    <strong class="{{ 'profit' if totals.profit >= 0 else 'loss' }}">
-      {{ "{:+,.0f}".format(totals.profit) }}
-    </strong>원
-    (<span class="{{ 'profit' if totals.return_pct >= 0 else 'loss' }}">{{ "{:+.2f}".format(totals.return_pct) }}%</span>)
-    · 누적실현손익
-    <strong class="{{ 'profit' if totals.realized_pnl >= 0 else 'loss' }}">{{ "{:+,.0f}".format(totals.realized_pnl) }}</strong>원
-    · 총수익(배당포함)
-    <strong class="{{ 'profit' if totals.total_return >= 0 else 'loss' }}">{{ "{:+,.0f}".format(totals.total_return) }}</strong>원
-  </p>
-  <table>
-    <tr><th>종목명</th><th>코드</th><th>보유수량</th><th>평균단가</th><th>평가금액</th><th>평가손익</th><th>수익률(%)</th><th>누적실현손익</th><th>총수익(배당포함)</th><th></th></tr>
-    {% for h in holdings %}
-    <tr>
-      <td>{{ h.name }}</td>
-      <td>{{ h.code }}</td>
-      <td>{{ "{:,.2f}".format(h.qty) }}</td>
-      <td>{{ "{:,.0f}".format(h.avg_price) }}</td>
-      <td>{{ "{:,.0f}".format(h.valuation) }}</td>
-      <td class="{{ 'profit' if h.profit >= 0 else 'loss' }}">{{ "{:+,.0f}".format(h.profit) }}</td>
-      <td class="{{ 'profit' if h.return_pct >= 0 else 'loss' }}">{{ "{:+.2f}".format(h.return_pct) }}</td>
-      <td class="{{ 'profit' if h.realized_pnl >= 0 else 'loss' }}">{{ "{:+,.0f}".format(h.realized_pnl) }}</td>
-      <td class="{{ 'profit' if h.total_return >= 0 else 'loss' }}">{{ "{:+,.0f}".format(h.total_return) }}</td>
-      <td><a href="{{ url_for('view_transactions', code=h.code) }}">매매내역</a></td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% else %}
-  <p class="empty">보유 중인 종목이 없습니다. 매매내역을 입력한 뒤 "포트폴리오 재계산" 버튼을 눌러보세요.</p>
-  {% endif %}
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2><span class="dot"></span>보유 현황</h2>
+        {% if holdings %}
+        <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>종목</th><th class="num">보유수량</th><th class="num">평균단가</th><th class="num">평가금액</th>
+              <th class="num">평가손익</th><th class="num">수익률</th><th class="num">실현손익</th><th class="num">총수익</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for h in holdings %}
+            <tr>
+              <td><div class="stock-name">{{ h.name }}</div><div class="stock-code">{{ h.code }}</div></td>
+              <td class="num">{{ "{:,.0f}".format(h.qty) }}</td>
+              <td class="num">{{ "{:,.0f}".format(h.avg_price) }}</td>
+              <td class="num">{{ "{:,.0f}".format(h.valuation) }}</td>
+              <td class="num {{ 'up' if h.profit >= 0 else 'down' }}">{{ "{:+,.0f}".format(h.profit) }}</td>
+              <td class="num {{ 'up' if h.return_pct >= 0 else 'down' }}">{{ "{:+.2f}".format(h.return_pct) }}%</td>
+              <td class="num {{ 'up' if h.realized_pnl >= 0 else 'down' }}">{{ "{:+,.0f}".format(h.realized_pnl) }}</td>
+              <td class="num {{ 'up' if h.total_return >= 0 else 'down' }}">{{ "{:+,.0f}".format(h.total_return) }}</td>
+              <td><a href="{{ url_for('view_transactions', code=h.code) }}">내역</a></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+        {% else %}
+        <p class="empty">보유 중인 종목이 없습니다. 매매내역을 입력하면 여기에 표시됩니다.</p>
+        {% endif %}
+      </div>
 
-  <h2>종목 등록</h2>
-  <form method="post" action="{{ url_for('create_stock') }}">
-    <input type="text" name="name" placeholder="종목명 (예: 삼성전자)" required>
-    <input type="text" name="code" placeholder="종목코드 (예: 005930)" required>
-    <select name="market" required>
-      {% for m in markets %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
-    </select>
-    <input type="text" name="sector" placeholder="섹터 (예: IT)" required>
-    <select name="currency" required>
-      {% for c in currencies %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
-    </select>
-    <button type="submit">등록</button>
-  </form>
+      <div class="card">
+        <h2><span class="dot"></span>등록된 종목 ({{ stocks|length }})</h2>
+        <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>종목</th><th>시장</th><th>섹터</th><th>통화</th><th class="num">현재가</th><th></th></tr></thead>
+          <tbody>
+          {% for s in stocks %}
+            <tr>
+              <td><div class="stock-name">{{ s.name }}</div><div class="stock-code">{{ s.code }}</div></td>
+              <td>{{ s.market }}</td>
+              <td>{{ s.sector }}</td>
+              <td>{{ s.currency }}</td>
+              <td class="num">{{ "{:,.0f}".format(s.current_price) }}</td>
+              <td><a href="{{ url_for('view_transactions', code=s.code) }}">내역</a></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </div>
 
-  <h2>매매내역 입력</h2>
-  <form method="post" action="{{ url_for('create_transaction') }}">
-    <select name="code" required>
-      <option value="" disabled selected>종목 선택</option>
-      {% for s in stocks %}<option value="{{ s.code }}">{{ s.name }} ({{ s.code }})</option>{% endfor %}
-    </select>
-    <select name="type" required>
-      <option value="매수">매수</option>
-      <option value="매도">매도</option>
-    </select>
-    <input type="number" step="any" name="qty" placeholder="수량" required>
-    <input type="number" step="any" name="price" placeholder="단가" required>
-    <input type="number" step="any" name="fee" placeholder="수수료(선택)">
-    <input type="date" name="date" required>
-    <button type="submit">등록 (포트폴리오 자동 재계산)</button>
-  </form>
+    <div>
+      {% if holdings %}
+      <div class="card">
+        <h2><span class="dot"></span>종목 비중</h2>
+        <div class="chart-wrap"><canvas id="allocChart"></canvas></div>
+      </div>
+      {% endif %}
 
-  <h2>배당금 입력</h2>
-  <form method="post" action="{{ url_for('create_dividend') }}">
-    <select name="code" required>
-      <option value="" disabled selected>종목 선택</option>
-      {% for s in stocks %}<option value="{{ s.code }}">{{ s.name }} ({{ s.code }})</option>{% endfor %}
-    </select>
-    <input type="date" name="date" required>
-    <input type="number" step="any" name="pretax" placeholder="세전배당금" required>
-    <input type="number" step="any" name="posttax" placeholder="세후배당금" required>
-    <button type="submit">등록</button>
-  </form>
-  <p class="hint">※ DB_DIVIDENDS_ID가 .env에 설정되어 있어야 동작합니다.</p>
+      <div class="card">
+        <h2><span class="dot"></span>매매내역 입력</h2>
+        <form class="entry" method="post" action="{{ url_for('create_transaction') }}">
+          <div class="row">
+            <select name="code" required>
+              <option value="" disabled selected>종목 선택</option>
+              {% for s in stocks %}<option value="{{ s.code }}">{{ s.name }} ({{ s.code }})</option>{% endfor %}
+            </select>
+            <select name="type" required style="max-width:90px;">
+              <option value="매수">매수</option>
+              <option value="매도">매도</option>
+            </select>
+          </div>
+          <div class="row">
+            <input type="number" step="any" name="qty" placeholder="수량" required>
+            <input type="number" step="any" name="price" placeholder="단가" required>
+          </div>
+          <div class="row">
+            <input type="number" step="any" name="fee" placeholder="수수료 (선택)">
+            <input type="date" name="date" required>
+          </div>
+          <button type="submit">등록 후 자동 재계산</button>
+        </form>
+      </div>
 
-  <h2>등록된 종목 ({{ stocks|length }}개)</h2>
-  <table>
-    <tr><th>종목명</th><th>코드</th><th>시장</th><th>섹터</th><th>통화</th><th>현재가</th><th></th></tr>
-    {% for s in stocks %}
-    <tr>
-      <td>{{ s.name }}</td>
-      <td>{{ s.code }}</td>
-      <td>{{ s.market }}</td>
-      <td>{{ s.sector }}</td>
-      <td>{{ s.currency }}</td>
-      <td>{{ "{:,.0f}".format(s.current_price) }}</td>
-      <td><a href="{{ url_for('view_transactions', code=s.code) }}">매매내역</a></td>
-    </tr>
-    {% endfor %}
-  </table>
-  <p class="hint">상세 보유수량/평가손익 등 전체 현황은 Notion의 "포트폴리오 요약" 데이터베이스에서 확인하세요.</p>
+      <div class="card">
+        <h2><span class="dot"></span>종목 등록</h2>
+        <form class="entry" method="post" action="{{ url_for('create_stock') }}">
+          <div class="row">
+            <input type="text" name="name" placeholder="종목명" required>
+            <input type="text" name="code" placeholder="종목코드" required>
+          </div>
+          <div class="row">
+            <select name="market" required>
+              {% for m in markets %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+            </select>
+            <input type="text" name="sector" placeholder="섹터" required>
+            <select name="currency" required style="max-width:90px;">
+              {% for c in currencies %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+            </select>
+          </div>
+          <button type="submit">종목 등록</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2><span class="dot"></span>배당금 입력</h2>
+        <form class="entry" method="post" action="{{ url_for('create_dividend') }}">
+          <select name="code" required>
+            <option value="" disabled selected>종목 선택</option>
+            {% for s in stocks %}<option value="{{ s.code }}">{{ s.name }} ({{ s.code }})</option>{% endfor %}
+          </select>
+          <div class="row">
+            <input type="number" step="any" name="pretax" placeholder="세전배당금" required>
+            <input type="number" step="any" name="posttax" placeholder="세후배당금" required>
+          </div>
+          <input type="date" name="date" required>
+          <button type="submit">배당금 등록</button>
+        </form>
+        <p class="hint">배당금은 "총수익(배당포함)" 계산에 자동 반영됩니다.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if holdings %}
+<script>
+  const holdingsData = [
+    {% for h in holdings %}{ name: {{ h.name | tojson }}, value: {{ h.valuation }} },{% endfor %}
+  ];
+  new Chart(document.getElementById("allocChart"), {
+    type: "doughnut",
+    data: {
+      labels: holdingsData.map(h => h.name),
+      datasets: [{
+        data: holdingsData.map(h => h.value),
+        backgroundColor: ["#6366f1","#8b5cf6","#ec4899","#f59e0b","#34d399","#22d3ee","#f87171","#a3e635"],
+        borderColor: "#131c31",
+        borderWidth: 3,
+      }]
+    },
+    options: {
+      maintainAspectRatio: false,
+      cutout: "62%",
+      plugins: {
+        legend: { position: "bottom", labels: { color: "#7c8db5", font: { family: "Pretendard", size: 12 }, padding: 14, usePointStyle: true } },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.parsed.toLocaleString()}원 (${(ctx.parsed / holdingsData.reduce((a,h)=>a+h.value,0) * 100).toFixed(1)}%)`
+          }
+        }
+      }
+    }
+  });
+</script>
+{% endif %}
 </body>
 </html>

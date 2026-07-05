@@ -114,10 +114,33 @@ def cmd_sync_portfolio(_args: argparse.Namespace) -> None:
     sync_all_portfolios()
 
 
+def cmd_kis_check_balance(_args: argparse.Namespace) -> None:
+    """KIS 계좌 잔고와 Notion 기록을 교차검증한다(읽기 전용, 아무것도 덮어쓰지 않음)."""
+    from stockapp_notion.kis_api import check_balance_against_notion
+
+    discrepancies = check_balance_against_notion()
+    if discrepancies:
+        print(f"불일치 {len(discrepancies)}건:")
+        for d in discrepancies:
+            print(f"  - {d}")
+    else:
+        print("KIS 계좌와 Notion 기록이 일치합니다.")
+
+
 def cmd_daily_update(_args: argparse.Namespace) -> None:
-    """cron/스케줄러에서 호출하는 일 배치: 현재가 갱신 후 포트폴리오 재계산."""
+    """cron/스케줄러에서 호출하는 일 배치: 현재가 갱신 후 포트폴리오 재계산.
+    KIS가 설정되어 있으면 잔고 교차검증도 수행한다(로그만 남김)."""
+    from stockapp_notion.config import settings
+
     update_all_prices()
     sync_all_portfolios()
+    if settings.kis_enabled:
+        from stockapp_notion.kis_api import check_balance_against_notion
+
+        try:
+            check_balance_against_notion()
+        except Exception:
+            logger.exception("KIS 잔고 교차검증 실패 (일일 배치는 계속 진행됨)")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -173,6 +196,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("daily-update", help="현재가 갱신 + 포트폴리오 재계산 (cron용)")
     p.set_defaults(func=cmd_daily_update)
+
+    p = sub.add_parser("kis-check-balance", help="KIS 계좌 잔고와 Notion 기록 교차검증 (읽기 전용)")
+    p.set_defaults(func=cmd_kis_check_balance)
 
     return parser
 
