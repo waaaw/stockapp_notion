@@ -22,6 +22,10 @@
   .flash.error { background: #fee2e2; color: #991b1b; }
   .actions { display: flex; gap: 8px; margin: 12px 0; }
   .hint { color: #64748b; font-size: 12px; }
+  .profit { color: #b91c1c; }
+  .loss { color: #1d4ed8; }
+  .totals { font-size: 15px; margin: 10px 0 4px; }
+  .empty { color: #94a3b8; font-size: 13px; padding: 10px 0; }
 </style>
 </head>
 <body>
@@ -45,6 +49,34 @@
       <button type="submit" class="secondary">일일 갱신(현재가+포트폴리오)</button>
     </form>
   </div>
+
+  <h2>보유 현황</h2>
+  {% if holdings %}
+  <p class="totals">
+    총 평가금액 <strong>{{ "{:,.0f}".format(totals.valuation) }}</strong>원 ·
+    총 평가손익
+    <strong class="{{ 'profit' if totals.profit >= 0 else 'loss' }}">
+      {{ "{:+,.0f}".format(totals.profit) }}
+    </strong>원
+    (<span class="{{ 'profit' if totals.return_pct >= 0 else 'loss' }}">{{ "{:+.2f}".format(totals.return_pct) }}%</span>)
+  </p>
+  <table>
+    <tr><th>종목명</th><th>코드</th><th>보유수량</th><th>평균단가</th><th>평가금액</th><th>평가손익</th><th>수익률(%)</th></tr>
+    {% for h in holdings %}
+    <tr>
+      <td>{{ h.name }}</td>
+      <td>{{ h.code }}</td>
+      <td>{{ "{:,.2f}".format(h.qty) }}</td>
+      <td>{{ "{:,.0f}".format(h.avg_price) }}</td>
+      <td>{{ "{:,.0f}".format(h.valuation) }}</td>
+      <td class="{{ 'profit' if h.profit >= 0 else 'loss' }}">{{ "{:+,.0f}".format(h.profit) }}</td>
+      <td class="{{ 'profit' if h.return_pct >= 0 else 'loss' }}">{{ "{:+.2f}".format(h.return_pct) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="empty">보유 중인 종목이 없습니다. 매매내역을 입력한 뒤 "포트폴리오 재계산" 버튼을 눌러보세요.</p>
+  {% endif %}
 
   <h2>종목 등록</h2>
   <form method="post" action="{{ url_for('create_stock') }}">

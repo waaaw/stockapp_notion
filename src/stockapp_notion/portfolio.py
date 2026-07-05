@@ -24,6 +24,16 @@ def _prop_select_name(page: dict, name: str) -> str:
     return select["name"] if select else ""
 
 
+def _prop_title(page: dict, name: str) -> str:
+    items = page["properties"][name]["title"]
+    return items[0]["text"]["content"] if items else ""
+
+
+def _prop_rich_text(page: dict, name: str) -> str:
+    items = page["properties"][name]["rich_text"]
+    return items[0]["text"]["content"] if items else ""
+
+
 def compute_holding(transactions: list[dict]) -> Holding:
     """거래일자 오름차순 매매내역으로부터 이동평균 방식 보유수량/평균단가를 계산한다.
     매도 시 평균단가는 유지되고 남은 수량만 줄어든다(단순 가중평균 방식)."""
@@ -105,6 +115,44 @@ def sync_portfolio_for_stock(stock_page: dict, client=None) -> dict | None:
         return_pct,
     )
     return page
+
+
+def list_portfolio_summary(client=None) -> list[dict]:
+    """포트폴리오 요약 DB의 모든 행을 종목명/코드와 함께 정리해 반환한다(웹 UI 보유 현황용).
+    평가금액이 큰 순서로 정렬한다."""
+    client = client or get_client()
+    data_source_id = resolve_data_source_id(client, settings.db_portfolio_id)
+
+    rows: list[dict] = []
+    cursor = None
+    while True:
+        response = call_with_retry(
+            client.data_sources.query, data_source_id=data_source_id, start_cursor=cursor
+        )
+        rows.extend(response["results"])
+        if not response.get("has_more"):
+            break
+        cursor = response.get("next_cursor")
+
+    stocks_by_id = {page["id"]: page for page in list_stocks(client=client)}
+
+    summary = []
+    for row in rows:
+        relation = row["properties"]["종목"]["relation"]
+        stock_page = stocks_by_id.get(relation[0]["id"]) if relation else None
+        summary.append(
+            {
+                "name": _prop_title(stock_page, "종목명") if stock_page else "(알 수 없음)",
+                "code": _prop_rich_text(stock_page, "종목코드") if stock_page else "",
+                "qty": _prop_number(row, "보유수량"),
+                "avg_price": _prop_number(row, "평균단가"),
+                "valuation": _prop_number(row, "평가금액"),
+                "profit": _prop_number(row, "평가손익"),
+                "return_pct": _prop_number(row, "수익률(%)"),
+            }
+        )
+    summary.sort(key=lambda r: r["valuation"], reverse=True)
+    return summary
 
 
 def sync_all_portfolios(client=None) -> None:

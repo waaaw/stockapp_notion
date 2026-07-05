@@ -5,7 +5,7 @@ from flask import Flask, flash, redirect, render_template, request, url_for
 from stockapp_notion.dividends import add_dividend
 from stockapp_notion.logging_config import get_logger
 from stockapp_notion.notion_api import get_client
-from stockapp_notion.portfolio import sync_all_portfolios
+from stockapp_notion.portfolio import list_portfolio_summary, sync_all_portfolios
 from stockapp_notion.prices import update_all_prices
 from stockapp_notion.stocks import add_stock, find_stock_by_code, list_stocks
 from stockapp_notion.transactions import add_transaction
@@ -54,11 +54,32 @@ def _stock_rows(client) -> list[dict]:
     return rows
 
 
+def _portfolio_totals(holdings: list[dict]) -> dict:
+    total_valuation = sum(h["valuation"] for h in holdings)
+    total_profit = sum(h["profit"] for h in holdings)
+    total_cost = total_valuation - total_profit
+    total_return_pct = (total_profit / total_cost * 100) if total_cost else 0.0
+    return {
+        "valuation": total_valuation,
+        "profit": total_profit,
+        "return_pct": total_return_pct,
+    }
+
+
 @app.route("/")
 def index():
     client = get_client()
     stocks = _stock_rows(client)
-    return render_template("index.html", stocks=stocks, markets=MARKETS, currencies=CURRENCIES)
+    holdings = [h for h in list_portfolio_summary(client=client) if h["qty"] > 0]
+    totals = _portfolio_totals(holdings)
+    return render_template(
+        "index.html",
+        stocks=stocks,
+        markets=MARKETS,
+        currencies=CURRENCIES,
+        holdings=holdings,
+        totals=totals,
+    )
 
 
 @app.route("/stocks", methods=["POST"])
