@@ -6,8 +6,9 @@ from stockapp_notion.dividends import add_dividend
 from stockapp_notion.logging_config import get_logger
 from stockapp_notion.notion_api import get_client
 from stockapp_notion.notion_helpers import prop_number, prop_rich_text, prop_select_name, prop_title
+from stockapp_notion.markets import CURRENCIES, MARKETS
 from stockapp_notion.portfolio import list_portfolio_summary, sync_all_portfolios, sync_portfolio_for_stock
-from stockapp_notion.prices import update_all_prices
+from stockapp_notion.prices import fetch_fx_rate_to_krw, update_all_prices
 from stockapp_notion.stocks import add_stock, find_stock_by_code, list_stocks
 from stockapp_notion.transactions import (
     TRADE_TYPES,
@@ -22,9 +23,6 @@ logger = get_logger(__name__)
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
-
-MARKETS = ["코스피", "코스닥", "나스닥", "NYSE", "기타"]
-CURRENCIES = ["KRW", "USD"]
 
 
 def _stock_rows(client) -> list[dict]:
@@ -43,19 +41,53 @@ def _stock_rows(client) -> list[dict]:
     return rows
 
 
-def _portfolio_totals(holdings: list[dict]) -> dict:
-    total_valuation = sum(h["valuation"] for h in holdings)
-    total_profit = sum(h["profit"] for h in holdings)
-    total_cost = total_valuation - total_profit
-    total_return_pct = (total_profit / total_cost * 100) if total_cost else 0.0
-    total_realized = sum(h["realized_pnl"] for h in holdings)
-    total_return = sum(h["total_return"] for h in holdings)
+_TOTAL_FIELDS = ("valuation", "profit", "realized_pnl", "total_return")
+
+
+def _sum_group(rows: list[dict]) -> dict:
+    agg = {f: sum(r[f] for r in rows) for f in _TOTAL_FIELDS}
+    cost = agg["valuation"] - agg["profit"]
+    agg["return_pct"] = (agg["profit"] / cost * 100) if cost else 0.0
+    return agg
+
+
+def _portfolio_totals(summary: list[dict]) -> dict:
+    """통화가 섞여 있어도 잘못된 합산을 하지 않도록 통화별로 소계를 내고,
+    환율을 조회해 KRW 환산 총계도 함께 계산한다. 모든 종목이 KRW면 환율 조회 없이
+    기존과 동일하게 동작한다.
+
+    반환:
+      by_currency: {통화: {소계 필드...}}  (해당 통화 원화폐 기준)
+      krw: {KRW 환산 총계 필드...}
+      multi_currency: 통화가 2개 이상인지
+      fx_rates: {통화: 환율}
+      fx_incomplete: 일부 통화 환율 조회 실패 여부(총계가 불완전할 수 있음)
+    """
+    by_currency: dict[str, dict] = {}
+    for cur in {h["currency"] for h in summary}:
+        by_currency[cur] = _sum_group([h for h in summary if h["currency"] == cur])
+
+    # KRW 환산 총계 (KRW은 환율 1.0, 그 외는 yfinance 조회)
+    krw = {f: 0.0 for f in _TOTAL_FIELDS}
+    fx_rates: dict[str, float] = {}
+    fx_incomplete = False
+    for cur, sub in by_currency.items():
+        rate = fetch_fx_rate_to_krw(cur)
+        if rate is None:
+            fx_incomplete = True
+            continue
+        fx_rates[cur] = rate
+        for f in _TOTAL_FIELDS:
+            krw[f] += sub[f] * rate
+    krw_cost = krw["valuation"] - krw["profit"]
+    krw["return_pct"] = (krw["profit"] / krw_cost * 100) if krw_cost else 0.0
+
     return {
-        "valuation": total_valuation,
-        "profit": total_profit,
-        "return_pct": total_return_pct,
-        "realized_pnl": total_realized,
-        "total_return": total_return,
+        "by_currency": by_currency,
+        "krw": krw,
+        "multi_currency": len(by_currency) > 1,
+        "fx_rates": fx_rates,
+        "fx_incomplete": fx_incomplete,
     }
 
 
@@ -67,6 +99,10 @@ def index():
     # 청산(보유수량 0)된 종목도 실현손익/총수익 합계에는 반영하되, 표에는 현재 보유 중인 종목만 보여준다.
     holdings = [h for h in summary if h["qty"] > 0]
     totals = _portfolio_totals(summary)
+    # 종목 비중 차트는 통화가 섞여도 공정하게 비교되도록 KRW 환산 평가금액을 쓴다.
+    for h in holdings:
+        rate = totals["fx_rates"].get(h["currency"], 1.0)
+        h["krw_valuation"] = h["valuation"] * rate
     return render_template(
         "index.html",
         stocks=stocks,

@@ -1,20 +1,16 @@
 from stockapp_notion.config import settings
 from stockapp_notion.logging_config import get_logger
+from stockapp_notion.markets import ticker_suffix
 from stockapp_notion.notion_api import call_with_retry, get_client, resolve_data_source_id
 
 logger = get_logger(__name__)
 
-_MARKET_TICKER_SUFFIX = {
-    "코스피": ".KS",
-    "코스닥": ".KQ",
-}
-
 
 def yfinance_ticker(code: str, market: str) -> str:
     """종목코드+시장구분으로 yfinance 조회용 티커를 만든다.
-    나스닥/NYSE 등 해외 종목은 코드를 그대로 사용한다."""
-    suffix = _MARKET_TICKER_SUFFIX.get(market, "")
-    return f"{code}{suffix}"
+    국내: 코스피=.KS/코스닥=.KQ, 미국(나스닥/NYSE/AMEX): 코드 그대로,
+    중국: 상해=.SS/심천=.SZ, 홍콩=.HK (markets.MARKET_INFO 참조)."""
+    return f"{code}{ticker_suffix(market)}"
 
 
 def list_stocks(client=None) -> list[dict]:

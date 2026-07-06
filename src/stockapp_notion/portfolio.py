@@ -195,6 +195,7 @@ def list_portfolio_summary(client=None) -> list[dict]:
             {
                 "name": prop_title(stock_page, "종목명") if stock_page else "(알 수 없음)",
                 "code": prop_rich_text(stock_page, "종목코드") if stock_page else "",
+                "currency": (prop_select_name(stock_page, "통화") or "KRW") if stock_page else "KRW",
                 "qty": prop_number(row, "보유수량"),
                 "avg_price": prop_number(row, "평균단가"),
                 "valuation": prop_number(row, "평가금액"),

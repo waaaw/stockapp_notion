@@ -22,6 +22,26 @@ def fetch_current_price(code: str, market: str) -> float | None:
         return None
 
 
+# 통화 -> yfinance 환율 티커 (해외주식 평가금액을 KRW로 환산할 때 사용)
+_FX_TICKER = {"USD": "KRW=X", "CNY": "CNYKRW=X", "HKD": "HKDKRW=X"}
+
+
+def fetch_fx_rate_to_krw(currency: str) -> float | None:
+    """해당 통화 1단위가 몇 원인지(원화 환산 환율)를 반환한다.
+    KRW은 1.0, 조회 실패 시 None(호출부에서 환산을 건너뛰어 잘못된 합계를 내지 않도록 함)."""
+    if currency == "KRW":
+        return 1.0
+    ticker = _FX_TICKER.get(currency)
+    if not ticker:
+        return None
+    try:
+        rate = yf.Ticker(ticker).fast_info.last_price
+        return float(rate) if rate else None
+    except Exception:
+        logger.exception("환율 조회 실패: %s (%s)", currency, ticker)
+        return None
+
+
 def update_all_prices(client=None) -> dict[str, int]:
     """종목 마스터 DB의 모든 종목에 대해 현재가를 갱신한다.
     성공/실패 개수를 반환하여 배치 실행 결과를 로그로 남길 수 있게 한다."""

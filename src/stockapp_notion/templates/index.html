@@ -148,25 +148,54 @@
     {% endfor %}
   {% endwith %}
 
+  {% set krw = totals.krw %}
   <div class="stats">
     <div class="stat-card">
-      <div class="label">총 평가금액</div>
-      <div class="value">{{ "{:,.0f}".format(totals.valuation) }}<span style="font-size:14px; color:var(--muted);"> 원</span></div>
+      <div class="label">총 평가금액{% if totals.multi_currency %} (KRW 환산){% endif %}</div>
+      <div class="value">{{ "{:,.0f}".format(krw.valuation) }}<span style="font-size:14px; color:var(--muted);"> 원</span></div>
     </div>
     <div class="stat-card">
       <div class="label">평가손익 (미실현)</div>
-      <div class="value {{ 'up' if totals.profit >= 0 else 'down' }}">{{ "{:+,.0f}".format(totals.profit) }}</div>
-      <div class="delta {{ 'up' if totals.return_pct >= 0 else 'down' }}">{{ "{:+.2f}".format(totals.return_pct) }}%</div>
+      <div class="value {{ 'up' if krw.profit >= 0 else 'down' }}">{{ "{:+,.0f}".format(krw.profit) }}</div>
+      <div class="delta {{ 'up' if krw.return_pct >= 0 else 'down' }}">{{ "{:+.2f}".format(krw.return_pct) }}%</div>
     </div>
     <div class="stat-card">
       <div class="label">누적 실현손익</div>
-      <div class="value {{ 'up' if totals.realized_pnl >= 0 else 'down' }}">{{ "{:+,.0f}".format(totals.realized_pnl) }}</div>
+      <div class="value {{ 'up' if krw.realized_pnl >= 0 else 'down' }}">{{ "{:+,.0f}".format(krw.realized_pnl) }}</div>
     </div>
     <div class="stat-card">
       <div class="label">총수익 (실현+미실현+배당)</div>
-      <div class="value {{ 'up' if totals.total_return >= 0 else 'down' }}">{{ "{:+,.0f}".format(totals.total_return) }}</div>
+      <div class="value {{ 'up' if krw.total_return >= 0 else 'down' }}">{{ "{:+,.0f}".format(krw.total_return) }}</div>
     </div>
   </div>
+
+  {% if totals.multi_currency %}
+  <div class="card" style="margin-bottom:20px;">
+    <h2><span class="dot"></span>통화별 소계
+      {% if totals.fx_rates %}<span style="font-size:12px; color:var(--muted); font-weight:400; margin-left:8px;">
+        환율 {% for cur, rate in totals.fx_rates.items() %}{{ cur }} {{ "{:,.1f}".format(rate) }}원{% if not loop.last %} · {% endif %}{% endfor %}
+      </span>{% endif %}
+    </h2>
+    {% if totals.fx_incomplete %}<div class="flash error" style="margin:0 0 12px;">일부 통화의 환율 조회에 실패해 KRW 환산 총계가 불완전할 수 있습니다.</div>{% endif %}
+    <div style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>통화</th><th class="num">평가금액</th><th class="num">평가손익</th><th class="num">수익률</th><th class="num">실현손익</th><th class="num">총수익</th></tr></thead>
+      <tbody>
+      {% for cur, sub in totals.by_currency.items() %}
+        <tr>
+          <td class="stock-name">{{ cur }}</td>
+          <td class="num">{{ "{:,.0f}".format(sub.valuation) }}</td>
+          <td class="num {{ 'up' if sub.profit >= 0 else 'down' }}">{{ "{:+,.0f}".format(sub.profit) }}</td>
+          <td class="num {{ 'up' if sub.return_pct >= 0 else 'down' }}">{{ "{:+.2f}".format(sub.return_pct) }}%</td>
+          <td class="num {{ 'up' if sub.realized_pnl >= 0 else 'down' }}">{{ "{:+,.0f}".format(sub.realized_pnl) }}</td>
+          <td class="num {{ 'up' if sub.total_return >= 0 else 'down' }}">{{ "{:+,.0f}".format(sub.total_return) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+  {% endif %}
 
   <div class="grid">
     <div>
@@ -177,7 +206,7 @@
         <table>
           <thead>
             <tr>
-              <th>종목</th><th class="num">보유수량</th><th class="num">평균단가</th><th class="num">평가금액</th>
+              <th>종목</th><th>통화</th><th class="num">보유수량</th><th class="num">평균단가</th><th class="num">평가금액</th>
               <th class="num">평가손익</th><th class="num">수익률</th><th class="num">실현손익</th><th class="num">총수익</th><th></th>
             </tr>
           </thead>
@@ -185,9 +214,10 @@
           {% for h in holdings %}
             <tr>
               <td><div class="stock-name">{{ h.name }}</div><div class="stock-code">{{ h.code }}</div></td>
+              <td>{{ h.currency }}</td>
               <td class="num">{{ "{:,.0f}".format(h.qty) }}</td>
-              <td class="num">{{ "{:,.0f}".format(h.avg_price) }}</td>
-              <td class="num">{{ "{:,.0f}".format(h.valuation) }}</td>
+              <td class="num">{{ "{:,.2f}".format(h.avg_price) if h.currency != 'KRW' else "{:,.0f}".format(h.avg_price) }}</td>
+              <td class="num">{{ "{:,.2f}".format(h.valuation) if h.currency != 'KRW' else "{:,.0f}".format(h.valuation) }}</td>
               <td class="num {{ 'up' if h.profit >= 0 else 'down' }}">{{ "{:+,.0f}".format(h.profit) }}</td>
               <td class="num {{ 'up' if h.return_pct >= 0 else 'down' }}">{{ "{:+.2f}".format(h.return_pct) }}%</td>
               <td class="num {{ 'up' if h.realized_pnl >= 0 else 'down' }}">{{ "{:+,.0f}".format(h.realized_pnl) }}</td>
@@ -301,7 +331,7 @@
 {% if holdings %}
 <script>
   const holdingsData = [
-    {% for h in holdings %}{ name: {{ h.name | tojson }}, value: {{ h.valuation }} },{% endfor %}
+    {% for h in holdings %}{ name: {{ h.name | tojson }}, value: {{ h.krw_valuation }} },{% endfor %}
   ];
   new Chart(document.getElementById("allocChart"), {
     type: "doughnut",

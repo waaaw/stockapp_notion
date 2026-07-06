@@ -3,6 +3,7 @@ import sys
 
 from stockapp_notion.dividends import add_dividend
 from stockapp_notion.logging_config import get_logger
+from stockapp_notion.markets import CURRENCIES, MARKETS
 from stockapp_notion.notion_api import get_client
 from stockapp_notion.portfolio import sync_all_portfolios, sync_portfolio_for_stock
 from stockapp_notion.prices import update_all_prices
@@ -150,9 +151,9 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("add-stock", help="종목 마스터 DB에 신규 종목 등록")
     p.add_argument("--name", required=True)
     p.add_argument("--code", required=True)
-    p.add_argument("--market", required=True, choices=["코스피", "코스닥", "나스닥", "NYSE", "기타"])
+    p.add_argument("--market", required=True, choices=MARKETS)
     p.add_argument("--sector", required=True)
-    p.add_argument("--currency", required=True, choices=["KRW", "USD"])
+    p.add_argument("--currency", required=True, choices=CURRENCIES)
     p.set_defaults(func=cmd_add_stock)
 
     p = sub.add_parser("add-transaction", help="매매내역 등록 + 포트폴리오 재계산")
