@@ -39,6 +39,32 @@ class Settings:
     def log_level(self) -> str:
         return os.getenv("LOG_LEVEL", "INFO")
 
+    # --- 웹 UI (호스트/포트/로그인) ---
+
+    @property
+    def web_host(self) -> str:
+        """기본값은 로컬 전용(127.0.0.1). Docker에서 외부 접속을 받으려면
+        .env에서 0.0.0.0으로 바꾼다(실제 노출 범위는 포트 매핑/Tailscale이 결정)."""
+        return os.getenv("WEB_HOST", "127.0.0.1")
+
+    @property
+    def web_port(self) -> int:
+        return int(os.getenv("WEB_PORT", "5000"))
+
+    @property
+    def web_auth_enabled(self) -> bool:
+        """WEB_USERNAME/WEB_PASSWORD가 설정되어 있으면 로그인을 요구한다.
+        둘 다 비어 있으면(로컬 전용 사용 등) 인증 없이 기존처럼 동작한다."""
+        return bool(os.getenv("WEB_USERNAME") and os.getenv("WEB_PASSWORD"))
+
+    @property
+    def web_username(self) -> str:
+        return _require("WEB_USERNAME")
+
+    @property
+    def web_password(self) -> str:
+        return _require("WEB_PASSWORD")
+
     # --- KIS(한국투자증권) Open API (선택 기능: KIS_APP_KEY 미설정 시 관련 기능 비활성) ---
 
     @property

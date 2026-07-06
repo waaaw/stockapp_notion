@@ -189,8 +189,40 @@ python -m stockapp_notion.webapp
 손익 색상은 한국 관례를 따라 상승=빨강, 하락=파랑입니다. 폰트(Pretendard)와 Chart.js는 CDN으로
 로드하므로 처음 열 때 인터넷 연결이 필요합니다.
 
-⚠️ 인증 없이 로컬(127.0.0.1)에서만 열리도록 되어 있습니다. 외부에 노출하려면(예: 다른 기기에서
-접속) 반드시 인증을 추가한 뒤 사용하세요.
+`.env`에 `WEB_USERNAME`/`WEB_PASSWORD`를 둘 다 채우면 로그인 화면이 뜨고, 비워두면(기본값)
+지금처럼 로컬 전용으로 인증 없이 동작합니다. 외부에서 접속할 계획이면 반드시 채우세요
+(자세한 내용은 아래 "라즈베리파이/Docker 배포" 절 참고).
+
+## 라즈베리파이/Docker 배포 (24시간 상시 구동 + 외부 접속)
+
+Windows PC 대신 라즈베리파이 5(또는 다른 상시 리눅스 환경)에 Docker로 올려 24시간 자동 갱신 +
+폰 등 외부 기기 접속을 하고 싶다면 이 절을 따르세요. 데이터는 전부 Notion에 있으므로 라즈베리파이는
+저장공간이 필요 없고, "인터넷 되는 상시 서버" 역할만 하면 됩니다. 상세 설계는
+[docs/plan-2026-07-06-raspberry-pi-deployment.md](docs/plan-2026-07-06-raspberry-pi-deployment.md) 참고.
+
+**1단계 — 라즈베리파이 준비**: 64비트 Raspberry Pi OS 설치 후 Docker/Docker Compose 설치
+(`curl -fsSL https://get.docker.com | sh`), 이 프로젝트를 복사(git clone 또는 scp).
+
+**2단계 — `.env` 작성**: 기존 항목(NOTION_TOKEN 등)에 더해 아래를 채웁니다.
+```
+WEB_HOST=0.0.0.0
+WEB_PORT=5000
+WEB_USERNAME=원하는아이디
+WEB_PASSWORD=원하는비밀번호
+FLASK_SECRET_KEY=아무거나_긴_랜덤문자열
+```
+
+**3단계 — 실행**:
+```bash
+docker compose up -d --build
+```
+`web`(gunicorn 웹 서버, 포트 5000)과 `scheduler`(기존 `scripts/run_daily_update.py` 그대로 재사용,
+매일 16:00 자동 갱신) 두 컨테이너가 뜹니다. Windows 작업 스케줄러는 더 이상 필요 없습니다.
+
+**4단계 — 외부 접속**: 웹 UI 자체엔 인증이 있지만, 포트를 그냥 인터넷에 열면 여전히 위험합니다.
+포트포워딩 대신 **[Tailscale](https://tailscale.com/)**(라즈베리파이와 폰에 각각 설치)로 사설
+네트워크처럼 연결하는 것을 강력히 권장합니다 — 공인 도메인/인증서/포트포워딩 없이 안전하게
+`http://라즈베리파이의-Tailscale-IP:5000`으로 폰에서 접속할 수 있습니다.
 
 ## 로깅 및 에러 처리
 
@@ -217,18 +249,23 @@ stockapp_notion/
 │   ├── notion_api.py       # 재시도/백오프 + data source 조회 + ensure_property
 │   ├── notion_helpers.py   # Notion 속성 추출 공용 헬퍼
 │   ├── validation.py       # 입력값 검증
+│   ├── markets.py          # 시장구분/통화 상수 + yfinance 티커 매핑
 │   ├── stocks.py           # 종목 마스터 CRUD, yfinance 티커 매핑
 │   ├── transactions.py     # 매매내역 등록/조회/수정/삭제, 중복감지, 총거래금액 계산
-│   ├── portfolio.py        # 보유수량/평균단가/실현손익/평가손익/총수익 계산 및 upsert
-│   ├── prices.py           # yfinance 현재가 조회 및 일괄 갱신
+│   ├── portfolio.py        # 보유/실현손익/총수익 계산, aggregate_totals(다중통화)
+│   ├── prices.py           # yfinance 현재가/환율 조회
 │   ├── dividends.py        # 배당금 내역 등록/합계 조회
+│   ├── kis_api.py          # 한국투자증권 Open API (잔고조회, 교차검증)
+│   ├── auth.py             # 웹 UI 로그인(세션 기반, 선택 기능)
 │   ├── cli.py               # CLI 진입점
 │   ├── webapp.py            # 로컬 웹 UI (Flask, 입력 폼 + 매매내역 관리)
-│   └── templates/index.html, transactions.html
+│   └── templates/index.html, transactions.html, login.html
 ├── scripts/
 │   ├── setup_notion_databases.py  # DB 4개 최초 생성
-│   └── run_daily_update.py        # APScheduler 상시 실행 예시
-├── tests/test_portfolio.py
+│   ├── daily_update.bat            # Windows 작업 스케줄러용
+│   └── run_daily_update.py        # APScheduler 상시 실행(Docker scheduler 서비스가 재사용)
+├── Dockerfile, docker-compose.yml, .dockerignore   # 라즈베리파이 등 상시 배포용
+├── tests/
 └── .env.example
 ```
 

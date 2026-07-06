@@ -137,6 +137,9 @@
       <form method="post" action="{{ url_for('action_update_prices') }}"><button type="submit">현재가 갱신</button></form>
       <form method="post" action="{{ url_for('action_sync_portfolio') }}"><button type="submit" class="ghost">포트폴리오 재계산</button></form>
       <form method="post" action="{{ url_for('action_daily_update') }}"><button type="submit" class="ghost">일일 갱신</button></form>
+      {% if web_auth_enabled %}
+      <form method="post" action="{{ url_for('logout') }}"><button type="submit" class="ghost">로그아웃</button></form>
+      {% endif %}
     </div>
   </div>
 </header>

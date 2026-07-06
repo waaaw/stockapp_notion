@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>로그인 - 주식 포트폴리오</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root {
+    --bg: #0b1120;
+    --card: #131c31;
+    --border: #1e2a45;
+    --text: #e2e8f0;
+    --muted: #7c8db5;
+    --accent: #6366f1;
+    --accent-2: #8b5cf6;
+    --up: #f87171;
+    --green: #34d399;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Pretendard", "Malgun Gothic", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 36px 32px;
+    width: 100%;
+    max-width: 340px;
+  }
+  h1 { font-size: 18px; font-weight: 700; margin-bottom: 22px; letter-spacing: -0.02em; }
+  .flash { padding: 10px 14px; border-radius: 10px; margin: 0 0 16px; font-size: 13.5px; border: 1px solid; }
+  .flash.error { background: rgba(248,113,113,.08); border-color: rgba(248,113,113,.3); color: var(--up); }
+  form { display: grid; gap: 12px; }
+  input {
+    font-family: inherit;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 14px;
+    width: 100%;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  button {
+    font-family: inherit;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 4px;
+  }
+  button:hover { opacity: .9; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>주식 포트폴리오 로그인</h1>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+    <form method="post">
+      <input type="text" name="username" placeholder="아이디" autofocus required>
+      <input type="password" name="password" placeholder="비밀번호" required>
+      <button type="submit">로그인</button>
+    </form>
+  </div>
+</body>
+</html>

@@ -1,7 +1,9 @@
 import os
 
-from flask import Flask, flash, redirect, render_template, request, url_for
+from flask import Flask, flash, redirect, render_template, request, session, url_for
 
+from stockapp_notion.auth import check_credentials, is_authenticated, mark_authenticated
+from stockapp_notion.config import settings
 from stockapp_notion.dividends import add_dividend
 from stockapp_notion.logging_config import get_logger
 from stockapp_notion.notion_api import get_client
@@ -28,8 +30,44 @@ from stockapp_notion.transactions import (
 logger = get_logger(__name__)
 
 app = Flask(__name__)
-# 재시작 후에도 flash 세션이 유지되도록 환경변수 우선(없으면 임시 랜덤 키)
+# 재시작 후에도 flash/로그인 세션이 유지되도록 환경변수 우선(없으면 임시 랜덤 키)
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.urandom(24)
+
+
+@app.before_request
+def _require_login():
+    """WEB_USERNAME/WEB_PASSWORD가 .env에 설정된 경우에만 로그인을 강제한다.
+    설정 안 되어 있으면(로컬 전용 사용) 기존처럼 인증 없이 동작한다."""
+    if not settings.web_auth_enabled:
+        return None
+    if request.endpoint in ("login", "static") or request.path == "/login":
+        return None
+    if not is_authenticated():
+        return redirect(url_for("login", next=request.path))
+    return None
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if not settings.web_auth_enabled:
+        return redirect(url_for("index"))
+    if request.method == "POST":
+        if check_credentials(request.form.get("username", ""), request.form.get("password", "")):
+            mark_authenticated()
+            return redirect(request.args.get("next") or url_for("index"))
+        flash("아이디 또는 비밀번호가 올바르지 않습니다.", "error")
+    return render_template("login.html")
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+@app.context_processor
+def _inject_auth_flag():
+    return {"web_auth_enabled": settings.web_auth_enabled}
 
 
 def _stock_rows(client) -> list[dict]:
@@ -264,7 +302,7 @@ def action_daily_update():
 
 
 def main() -> None:
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    app.run(host=settings.web_host, port=settings.web_port, debug=False)
 
 
 if __name__ == "__main__":

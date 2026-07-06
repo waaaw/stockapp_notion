@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.git/
+.pytest_cache/
+logs/*.log
+logs/*.out
+.env
+.kis_token_cache.json
+docs/
+*.egg-info/
+.claude/
