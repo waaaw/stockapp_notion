@@ -42,6 +42,19 @@ def fetch_fx_rate_to_krw(currency: str) -> float | None:
         return None
 
 
+def refresh_price_for_page(page: dict, client=None) -> float | None:
+    """단일 종목 페이지의 현재가를 즉시 조회해 Notion에 반영한다(종목 등록 직후 등에 사용).
+    조회 실패 시 아무것도 하지 않고 None을 반환한다."""
+    client = client or get_client()
+    code = prop_rich_text(page, "종목코드")
+    market = prop_select_name(page, "시장구분")
+    price = fetch_current_price(code, market)
+    if price is None:
+        return None
+    call_with_retry(client.pages.update, page_id=page["id"], properties={"현재가": {"number": price}})
+    return price
+
+
 def update_all_prices(client=None) -> dict[str, int]:
     """종목 마스터 DB의 모든 종목에 대해 현재가를 갱신한다.
     성공/실패 개수를 반환하여 배치 실행 결과를 로그로 남길 수 있게 한다."""

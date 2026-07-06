@@ -6,9 +6,14 @@ from stockapp_notion.dividends import add_dividend
 from stockapp_notion.logging_config import get_logger
 from stockapp_notion.notion_api import get_client
 from stockapp_notion.notion_helpers import prop_number, prop_rich_text, prop_select_name, prop_title
-from stockapp_notion.markets import CURRENCIES, MARKETS
-from stockapp_notion.portfolio import list_portfolio_summary, sync_all_portfolios, sync_portfolio_for_stock
-from stockapp_notion.prices import fetch_fx_rate_to_krw, update_all_prices
+from stockapp_notion.markets import CURRENCIES, MARKETS, default_currency
+from stockapp_notion.portfolio import (
+    aggregate_totals,
+    list_portfolio_summary,
+    sync_all_portfolios,
+    sync_portfolio_for_stock,
+)
+from stockapp_notion.prices import fetch_fx_rate_to_krw, refresh_price_for_page, update_all_prices
 from stockapp_notion.stocks import add_stock, find_stock_by_code, list_stocks
 from stockapp_notion.transactions import (
     TRADE_TYPES,
@@ -16,13 +21,15 @@ from stockapp_notion.transactions import (
     delete_transaction,
     find_duplicate_transaction,
     list_transactions_for_stock,
+    stock_id_from_transaction,
     update_transaction,
 )
 
 logger = get_logger(__name__)
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
+# 재시작 후에도 flash 세션이 유지되도록 환경변수 우선(없으면 임시 랜덤 키)
+app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.urandom(24)
 
 
 def _stock_rows(client) -> list[dict]:
@@ -41,56 +48,6 @@ def _stock_rows(client) -> list[dict]:
     return rows
 
 
-_TOTAL_FIELDS = ("valuation", "profit", "realized_pnl", "total_return")
-
-
-def _sum_group(rows: list[dict]) -> dict:
-    agg = {f: sum(r[f] for r in rows) for f in _TOTAL_FIELDS}
-    cost = agg["valuation"] - agg["profit"]
-    agg["return_pct"] = (agg["profit"] / cost * 100) if cost else 0.0
-    return agg
-
-
-def _portfolio_totals(summary: list[dict]) -> dict:
-    """통화가 섞여 있어도 잘못된 합산을 하지 않도록 통화별로 소계를 내고,
-    환율을 조회해 KRW 환산 총계도 함께 계산한다. 모든 종목이 KRW면 환율 조회 없이
-    기존과 동일하게 동작한다.
-
-    반환:
-      by_currency: {통화: {소계 필드...}}  (해당 통화 원화폐 기준)
-      krw: {KRW 환산 총계 필드...}
-      multi_currency: 통화가 2개 이상인지
-      fx_rates: {통화: 환율}
-      fx_incomplete: 일부 통화 환율 조회 실패 여부(총계가 불완전할 수 있음)
-    """
-    by_currency: dict[str, dict] = {}
-    for cur in {h["currency"] for h in summary}:
-        by_currency[cur] = _sum_group([h for h in summary if h["currency"] == cur])
-
-    # KRW 환산 총계 (KRW은 환율 1.0, 그 외는 yfinance 조회)
-    krw = {f: 0.0 for f in _TOTAL_FIELDS}
-    fx_rates: dict[str, float] = {}
-    fx_incomplete = False
-    for cur, sub in by_currency.items():
-        rate = fetch_fx_rate_to_krw(cur)
-        if rate is None:
-            fx_incomplete = True
-            continue
-        fx_rates[cur] = rate
-        for f in _TOTAL_FIELDS:
-            krw[f] += sub[f] * rate
-    krw_cost = krw["valuation"] - krw["profit"]
-    krw["return_pct"] = (krw["profit"] / krw_cost * 100) if krw_cost else 0.0
-
-    return {
-        "by_currency": by_currency,
-        "krw": krw,
-        "multi_currency": len(by_currency) > 1,
-        "fx_rates": fx_rates,
-        "fx_incomplete": fx_incomplete,
-    }
-
-
 @app.route("/")
 def index():
     client = get_client()
@@ -98,7 +55,7 @@ def index():
     summary = list_portfolio_summary(client=client)
     # 청산(보유수량 0)된 종목도 실현손익/총수익 합계에는 반영하되, 표에는 현재 보유 중인 종목만 보여준다.
     holdings = [h for h in summary if h["qty"] > 0]
-    totals = _portfolio_totals(summary)
+    totals = aggregate_totals(summary, fetch_fx_rate_to_krw)
     # 종목 비중 차트는 통화가 섞여도 공정하게 비교되도록 KRW 환산 평가금액을 쓴다.
     for h in holdings:
         rate = totals["fx_rates"].get(h["currency"], 1.0)
@@ -116,14 +73,21 @@ def index():
 @app.route("/stocks", methods=["POST"])
 def create_stock():
     try:
-        add_stock(
+        client = get_client()
+        market = request.form["market"]
+        # 통화 미선택 시 시장구분으로부터 기본 통화 추론
+        currency = request.form.get("currency") or default_currency(market)
+        page = add_stock(
             name=request.form["name"],
             code=request.form["code"],
-            market=request.form["market"],
+            market=market,
             sector=request.form["sector"],
-            currency=request.form["currency"],
+            currency=currency,
+            client=client,
         )
-        flash(f"종목 등록 완료: {request.form['name']}({request.form['code']})", "success")
+        price = refresh_price_for_page(page, client=client)
+        note = f" (현재가 {price:,.0f})" if price is not None else " (현재가 조회 실패 - 나중에 '현재가 갱신')"
+        flash(f"종목 등록 완료: {request.form['name']}({request.form['code']}){note}", "success")
     except Exception as exc:
         logger.exception("웹 UI 종목 등록 실패")
         flash(f"종목 등록 실패: {exc}", "error")
@@ -145,7 +109,7 @@ def create_transaction():
         qty = float(request.form["qty"])
         price = float(request.form["price"])
         if find_duplicate_transaction(stock["id"], trade_date, buy_sell, qty, price, client=client):
-            flash(f"주의: 동일 조건({trade_date} {buy_sell} {qty}주 @ {price})의 매매내역이 이미 있습니다. 그래도 등록을 진행합니다.", "error")
+            flash(f"주의: 동일 조건({trade_date} {buy_sell} {qty}주 @ {price})의 매매내역이 이미 있습니다. 그래도 등록을 진행합니다.", "warning")
 
         add_transaction(
             stock_page_id=stock["id"],
@@ -156,7 +120,7 @@ def create_transaction():
             fee=float(request.form.get("fee") or 0),
             client=client,
         )
-        sync_all_portfolios(client=client)
+        sync_portfolio_for_stock(stock, client=client)
         flash(f"매매내역 등록 완료: {code} {buy_sell} {qty}주", "success")
     except Exception as exc:
         logger.exception("웹 UI 매매내역 등록 실패")
@@ -203,7 +167,7 @@ def edit_transaction(transaction_id):
     try:
         client = get_client()
         tx = client.pages.retrieve(page_id=transaction_id)
-        stock_id = tx["properties"]["종목"]["relation"][0]["id"]
+        stock_id = stock_id_from_transaction(tx)
 
         update_transaction(
             transaction_id,
@@ -229,7 +193,7 @@ def remove_transaction(transaction_id):
     try:
         client = get_client()
         tx = client.pages.retrieve(page_id=transaction_id)
-        stock_id = tx["properties"]["종목"]["relation"][0]["id"]
+        stock_id = stock_id_from_transaction(tx)
 
         delete_transaction(transaction_id, client=client)
         stock = client.pages.retrieve(page_id=stock_id)

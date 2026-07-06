@@ -58,16 +58,6 @@ def add_transaction(
     validate_date_str(trade_date)
 
     client = client or get_client()
-
-    if find_duplicate_transaction(stock_page_id, trade_date, buy_sell, qty, price, client=client):
-        logger.warning(
-            "동일 조건의 매매내역이 이미 존재합니다 (%s %s %s주 @ %s) - 중복 입력일 수 있으니 확인하세요.",
-            trade_date,
-            buy_sell,
-            qty,
-            price,
-        )
-
     total_amount = compute_total_amount(buy_sell, qty, price, fee)
 
     page = call_with_retry(
@@ -146,6 +136,15 @@ def delete_transaction(transaction_page_id: str, client=None) -> None:
     client = client or get_client()
     call_with_retry(client.pages.update, page_id=transaction_page_id, archived=True)
     logger.info("매매내역 삭제(휴지통 이동): %s", transaction_page_id)
+
+
+def stock_id_from_transaction(tx: dict) -> str:
+    """매매내역 페이지에서 연결된 종목 페이지 ID를 꺼낸다.
+    종목 연결이 끊긴 고아 거래면 명확한 에러를 던진다(IndexError 대신)."""
+    relation = tx["properties"]["종목"]["relation"]
+    if not relation:
+        raise ValueError(f"매매내역 {tx['id']}에 연결된 종목이 없습니다(고아 거래). Notion에서 종목을 다시 연결하세요.")
+    return relation[0]["id"]
 
 
 def list_transactions_for_stock(stock_page_id: str, client=None) -> list[dict]:

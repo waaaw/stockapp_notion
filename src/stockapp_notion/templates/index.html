@@ -66,6 +66,7 @@
   .flash { padding: 12px 16px; border-radius: 12px; margin: 0 0 16px; font-size: 14px; border: 1px solid; }
   .flash.success { background: rgba(52,211,153,.08); border-color: rgba(52,211,153,.3); color: var(--green); }
   .flash.error { background: rgba(248,113,113,.08); border-color: rgba(248,113,113,.3); color: var(--up); }
+  .flash.warning { background: rgba(245,158,11,.08); border-color: rgba(245,158,11,.35); color: #fbbf24; }
 
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 28px; }
   .stat-card {
@@ -290,7 +291,7 @@
 
       <div class="card">
         <h2><span class="dot"></span>종목 등록</h2>
-        <form class="entry" method="post" action="{{ url_for('create_stock') }}">
+        <form id="stock-form" class="entry" method="post" action="{{ url_for('create_stock') }}">
           <div class="row">
             <input type="text" name="name" placeholder="종목명" required>
             <input type="text" name="code" placeholder="종목코드" required>
@@ -306,6 +307,21 @@
           </div>
           <button type="submit">종목 등록</button>
         </form>
+        <script>
+          // 시장구분을 고르면 통화가 자동 선택됨 (markets.MARKET_INFO의 기본 통화와 일치)
+          (function () {
+            const marketToCurrency = {
+              "코스피": "KRW", "코스닥": "KRW", "나스닥": "USD", "NYSE": "USD",
+              "AMEX": "USD", "상해": "CNY", "심천": "CNY", "홍콩": "HKD", "기타": "KRW"
+            };
+            const form = document.getElementById("stock-form");
+            const market = form.querySelector('select[name="market"]');
+            const currency = form.querySelector('select[name="currency"]');
+            const sync = () => { const c = marketToCurrency[market.value]; if (c) currency.value = c; };
+            market.addEventListener("change", sync);
+            sync();
+          })();
+        </script>
       </div>
 
       <div class="card">

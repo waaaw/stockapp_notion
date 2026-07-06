@@ -2,6 +2,7 @@ from stockapp_notion.config import settings
 from stockapp_notion.logging_config import get_logger
 from stockapp_notion.markets import ticker_suffix
 from stockapp_notion.notion_api import call_with_retry, get_client, resolve_data_source_id
+from stockapp_notion.validation import validate_non_empty
 
 logger = get_logger(__name__)
 
@@ -54,6 +55,8 @@ def add_stock(
     client=None,
 ) -> dict:
     """종목 마스터 DB에 신규 종목을 등록한다. 이미 존재하면 등록을 건너뛴다."""
+    validate_non_empty(name, "종목명")
+    validate_non_empty(code, "종목코드")
     client = client or get_client()
 
     existing = find_stock_by_code(code, client=client)

@@ -210,6 +210,50 @@ def list_portfolio_summary(client=None) -> list[dict]:
     return summary
 
 
+_TOTAL_FIELDS = ("valuation", "profit", "realized_pnl", "total_return")
+
+
+def _sum_group(rows: list[dict]) -> dict:
+    agg = {f: sum(r[f] for r in rows) for f in _TOTAL_FIELDS}
+    cost = agg["valuation"] - agg["profit"]
+    agg["return_pct"] = (agg["profit"] / cost * 100) if cost else 0.0
+    return agg
+
+
+def aggregate_totals(summary: list[dict], fx_rate_fn) -> dict:
+    """통화가 섞여 있어도 잘못된 합산을 하지 않도록 통화별로 소계를 내고,
+    fx_rate_fn(통화)->원화환율 을 이용해 KRW 환산 총계도 계산한다.
+    fx_rate_fn은 주입형(테스트에서 스텁 가능). KRW은 항상 1.0을 반환해야 한다.
+
+    반환: by_currency(통화별 소계) / krw(환산 총계) / multi_currency / fx_rates / fx_incomplete
+    """
+    by_currency: dict[str, dict] = {}
+    for cur in {h["currency"] for h in summary}:
+        by_currency[cur] = _sum_group([h for h in summary if h["currency"] == cur])
+
+    krw = {f: 0.0 for f in _TOTAL_FIELDS}
+    fx_rates: dict[str, float] = {}
+    fx_incomplete = False
+    for cur, sub in by_currency.items():
+        rate = fx_rate_fn(cur)
+        if rate is None:
+            fx_incomplete = True
+            continue
+        fx_rates[cur] = rate
+        for f in _TOTAL_FIELDS:
+            krw[f] += sub[f] * rate
+    krw_cost = krw["valuation"] - krw["profit"]
+    krw["return_pct"] = (krw["profit"] / krw_cost * 100) if krw_cost else 0.0
+
+    return {
+        "by_currency": by_currency,
+        "krw": krw,
+        "multi_currency": len(by_currency) > 1,
+        "fx_rates": fx_rates,
+        "fx_incomplete": fx_incomplete,
+    }
+
+
 def sync_all_portfolios(client=None) -> None:
     client = client or get_client()
     stocks = list_stocks(client=client)

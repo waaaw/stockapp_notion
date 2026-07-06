@@ -6,13 +6,15 @@ from stockapp_notion.logging_config import get_logger
 from stockapp_notion.markets import CURRENCIES, MARKETS
 from stockapp_notion.notion_api import get_client
 from stockapp_notion.portfolio import sync_all_portfolios, sync_portfolio_for_stock
-from stockapp_notion.prices import update_all_prices
+from stockapp_notion.prices import refresh_price_for_page, update_all_prices
 from stockapp_notion.stocks import add_stock, find_stock_by_code
 from stockapp_notion.transactions import (
     TRADE_TYPES,
     add_transaction,
     delete_transaction,
+    find_duplicate_transaction,
     list_transactions_for_stock,
+    stock_id_from_transaction,
     update_transaction,
 )
 
@@ -28,7 +30,7 @@ def _resolve_stock_id(client, code: str) -> str:
 
 def cmd_add_stock(args: argparse.Namespace) -> None:
     client = get_client()
-    add_stock(
+    page = add_stock(
         name=args.name,
         code=args.code,
         market=args.market,
@@ -36,13 +38,20 @@ def cmd_add_stock(args: argparse.Namespace) -> None:
         currency=args.currency,
         client=client,
     )
+    price = refresh_price_for_page(page, client=client)
+    if price is not None:
+        print(f"현재가 조회 완료: {price}")
 
 
 def cmd_add_transaction(args: argparse.Namespace) -> None:
     client = get_client()
-    stock_id = _resolve_stock_id(client, args.code)
+    stock = find_stock_by_code(args.code, client=client)
+    if not stock:
+        raise SystemExit(f"종목코드 {args.code}를 종목 마스터 DB에서 찾을 수 없습니다. 먼저 add-stock으로 등록하세요.")
+    if find_duplicate_transaction(stock["id"], args.date, args.type, args.qty, args.price, client=client):
+        print(f"주의: 동일 조건({args.date} {args.type} {args.qty}주 @ {args.price})의 매매내역이 이미 있습니다. 그래도 등록합니다.")
     add_transaction(
-        stock_page_id=stock_id,
+        stock_page_id=stock["id"],
         trade_date=args.date,
         buy_sell=args.type,
         qty=args.qty,
@@ -50,7 +59,7 @@ def cmd_add_transaction(args: argparse.Namespace) -> None:
         fee=args.fee,
         client=client,
     )
-    sync_all_portfolios(client=client)
+    sync_portfolio_for_stock(stock, client=client)
 
 
 def cmd_list_transactions(args: argparse.Namespace) -> None:
@@ -81,15 +90,14 @@ def cmd_edit_transaction(args: argparse.Namespace) -> None:
         fee=args.fee,
         client=client,
     )
-    stock_id = tx["properties"]["종목"]["relation"][0]["id"]
-    stock = client.pages.retrieve(page_id=stock_id)
+    stock = client.pages.retrieve(page_id=stock_id_from_transaction(tx))
     sync_portfolio_for_stock(stock, client=client)
 
 
 def cmd_delete_transaction(args: argparse.Namespace) -> None:
     client = get_client()
     tx = client.pages.retrieve(page_id=args.transaction_id)
-    stock_id = tx["properties"]["종목"]["relation"][0]["id"]
+    stock_id = stock_id_from_transaction(tx)
     delete_transaction(args.transaction_id, client=client)
     stock = client.pages.retrieve(page_id=stock_id)
     sync_portfolio_for_stock(stock, client=client)
