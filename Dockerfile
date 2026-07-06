@@ -9,7 +9,7 @@ COPY scripts ./scripts
 
 # gunicorn은 Windows에서 설치가 안 되므로 requirements.txt에는 넣지 않고 여기서만 설치한다
 # (로컬 Windows 개발 환경의 pip install -e .는 그대로 유지).
-RUN pip install --no-cache-dir -e . && pip install --no-cache-dir gunicorn
+RUN pip install --no-cache-dir -e . && pip install --no-cache-dir "gunicorn==23.0.0"
 
 EXPOSE 5000
 

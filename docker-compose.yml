@@ -1,9 +1,11 @@
 # 라즈베리파이 등 상시 리눅스 환경에서 실행하기 위한 구성.
 # web: gunicorn으로 웹 UI 서빙. scheduler: 기존 scripts/run_daily_update.py를 그대로 재사용해
 # 매일 16:00(KST) daily-update를 실행한다(Windows 작업 스케줄러의 대체).
+# 두 서비스가 같은 이미지(stockapp-notion:local)를 공유해 이미지를 한 번만 빌드한다.
 services:
   web:
     build: .
+    image: stockapp-notion:local
     restart: unless-stopped
     ports:
       - "5000:5000"
@@ -11,10 +13,18 @@ services:
       - .env
     volumes:
       - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health')"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
   scheduler:
-    build: .
+    image: stockapp-notion:local
     restart: unless-stopped
+    depends_on:
+      - web
     env_file:
       - .env
     volumes:

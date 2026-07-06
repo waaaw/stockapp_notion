@@ -197,8 +197,12 @@ python -m stockapp_notion.webapp
 
 Windows PC 대신 라즈베리파이 5(또는 다른 상시 리눅스 환경)에 Docker로 올려 24시간 자동 갱신 +
 폰 등 외부 기기 접속을 하고 싶다면 이 절을 따르세요. 데이터는 전부 Notion에 있으므로 라즈베리파이는
-저장공간이 필요 없고, "인터넷 되는 상시 서버" 역할만 하면 됩니다. 상세 설계는
-[docs/plan-2026-07-06-raspberry-pi-deployment.md](docs/plan-2026-07-06-raspberry-pi-deployment.md) 참고.
+저장공간이 필요 없고, "인터넷 되는 상시 서버" 역할만 하면 됩니다.
+
+> 📖 **처음부터 끝까지 따라 하는 상세 설치 가이드**(하드웨어 준비 → OS 굽기 → SSH → Docker →
+> `.env` → 실행 → 폰 접속): **[docs/raspberry-pi-setup-guide.md](docs/raspberry-pi-setup-guide.md)**
+> 아래는 요약이며, 처음이라면 위 상세 가이드를 권장합니다. 설계 배경은
+> [docs/plan-2026-07-06-raspberry-pi-deployment.md](docs/plan-2026-07-06-raspberry-pi-deployment.md).
 
 **1단계 — 라즈베리파이 준비**: 64비트 Raspberry Pi OS 설치 후 Docker/Docker Compose 설치
 (`curl -fsSL https://get.docker.com | sh`), 이 프로젝트를 복사(git clone 또는 scp).

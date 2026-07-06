@@ -30,8 +30,20 @@ from stockapp_notion.transactions import (
 logger = get_logger(__name__)
 
 app = Flask(__name__)
-# 재시작 후에도 flash/로그인 세션이 유지되도록 환경변수 우선(없으면 임시 랜덤 키)
+
+# 로그인을 켤 때는 FLASK_SECRET_KEY가 반드시 있어야 한다. 없으면 gunicorn 다중 워커가
+# 각자 다른 임시 키를 만들어 세션 쿠키가 워커마다 무효가 되고 로그인이 간헐적으로 풀린다.
+if settings.web_auth_enabled and not os.getenv("FLASK_SECRET_KEY"):
+    raise RuntimeError(
+        "로그인(WEB_USERNAME/WEB_PASSWORD)을 켜려면 FLASK_SECRET_KEY도 .env에 설정해야 합니다. "
+        "(멀티 워커 환경에서 세션이 깨지는 것을 방지)"
+    )
+# 재시작/멀티 워커 간에도 세션이 유지되도록 환경변수 우선(로컬 무인증 사용 시엔 임시 랜덤 키 허용)
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.urandom(24)
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
+
+# 로그인 없이 접근 가능한 엔드포인트(로그인 화면, 정적 리소스, 헬스체크)
+_PUBLIC_ENDPOINTS = {"login", "static", "health"}
 
 
 @app.before_request
@@ -40,11 +52,17 @@ def _require_login():
     설정 안 되어 있으면(로컬 전용 사용) 기존처럼 인증 없이 동작한다."""
     if not settings.web_auth_enabled:
         return None
-    if request.endpoint in ("login", "static") or request.path == "/login":
+    if request.endpoint in _PUBLIC_ENDPOINTS:
         return None
     if not is_authenticated():
         return redirect(url_for("login", next=request.path))
     return None
+
+
+@app.route("/health")
+def health():
+    """컨테이너 헬스체크/모니터링용. 인증 없이 200을 반환한다(외부 의존성 조회 안 함)."""
+    return {"status": "ok"}, 200
 
 
 @app.route("/login", methods=["GET", "POST"])
